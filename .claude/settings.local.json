@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/PROJECTS/ChakraOS/apps/web\" && find . -maxdepth 3 -not -path \"*/node_modules*\" -not -path \"*/.turbo*\" -not -path \"*/dist*\" | sort)",
+      "Bash(cd \"C:/PROJECTS/ChakraOS/supabase\" && find functions migrations -maxdepth 2 | sort)",
+      "Read(//c/PROJECTS/ChakraOS/**)",
+      "Bash(find . -name \"config.toml\" -not -path \"*/node_modules*\")",
+      "Bash(find . -name \"deno.json*\" -not -path \"*/node_modules*\")",
+      "Bash(supabase --version)",
+      "Bash(vercel --version)",
+      "Bash(gh --version)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm format *)",
+      "Bash(pnpm build *)",
+      "Bash(rm -f tsconfig.app.tsbuildinfo tsconfig.node.tsbuildinfo)",
+      "Bash(npx tsc *)",
+      "Bash(npx --yes supabase --version)",
+      "Bash(npx supabase *)",
+      "Bash(curl -s \"https://ubsxdqswauvmnfutkrow.supabase.co/rest/v1/user_settings?select=ai_provider,nvidia_api_key,nvidia_model&limit=1\" -H \"apikey: sb_publishable_Jd7ChKCodU6Jm7bQhqeXBw_zvYcgtcj\" -w \"\\\\nHTTP %{http_code}\\\\n\")"
+    ]
+  }
+}
