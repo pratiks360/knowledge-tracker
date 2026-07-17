@@ -132,11 +132,11 @@ export function useCreateThread() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async (title = 'New chat'): Promise<ChatThreadRow> => {
+    mutationFn: async (title: string | void): Promise<ChatThreadRow> => {
       if (!user) throw new Error('Not signed in')
       const { data, error } = await supabase
         .from('chat_threads')
-        .insert({ user_id: user.id, title })
+        .insert({ user_id: user.id, title: title || 'New chat' })
         .select('*')
         .single()
       if (error) throw error
