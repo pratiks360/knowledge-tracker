@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import type { UserSettingsRow } from '@/types/db'
-import { PROVIDER_BASE, type AIConfig } from '@/lib/ai'
+import { PROVIDER_BASE, cloudflareBase, type AIConfig } from '@/lib/ai'
 
 const SETTINGS_KEY = ['user_settings'] as const
 
@@ -10,8 +10,17 @@ const SETTINGS_KEY = ['user_settings'] as const
 export function resolveAIConfig(settings: UserSettingsRow | null | undefined): AIConfig | null {
   if (!settings) return null
   const provider = settings.ai_provider ?? 'openrouter'
-  const apiKey =
-    provider === 'nvidia' ? settings.nvidia_api_key : settings.openrouter_api_key
+
+  if (provider === 'cloudflare') {
+    const apiKey = settings.cloudflare_api_key
+    const model = settings.cloudflare_model
+    const accountId = settings.cloudflare_account_id
+    // Cloudflare needs all three — its base URL embeds the account id.
+    if (!apiKey || !model || !accountId) return null
+    return { provider, apiKey, model, baseUrl: cloudflareBase(accountId) }
+  }
+
+  const apiKey = provider === 'nvidia' ? settings.nvidia_api_key : settings.openrouter_api_key
   const model = provider === 'nvidia' ? settings.nvidia_model : settings.selected_model
   if (!apiKey || !model) return null
   return { provider, apiKey, model, baseUrl: PROVIDER_BASE[provider] }
@@ -53,6 +62,9 @@ export function useSaveUserSettings() {
           | 'selected_model'
           | 'nvidia_api_key'
           | 'nvidia_model'
+          | 'cloudflare_api_key'
+          | 'cloudflare_account_id'
+          | 'cloudflare_model'
         >
       >
     ) => {

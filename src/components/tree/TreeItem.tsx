@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { TreeNode } from '@/lib/queries/nodes'
 import { useCreateNode, useDeleteNode, useUpdateNode } from '@/lib/queries/nodes'
 import { NodePicker } from '@/components/NodePicker'
+import { useUIStore } from '@/lib/store'
 import type { NodeRow } from '@/types/db'
 
 // Full static class strings (Tailwind can't see interpolated names).
@@ -37,7 +38,9 @@ export function TreeItem({
   allNodes: NodeRow[]
   resourceIds: Set<string>
 }) {
-  const [expanded, setExpanded] = useState(true)
+  const expanded = useUIStore((s) => s.expandedNodeIds.has(node.id))
+  const toggleNodeExpanded = useUIStore((s) => s.toggleNodeExpanded)
+  const expandNodes = useUIStore((s) => s.expandNodes)
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(node.title)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -51,6 +54,11 @@ export function TreeItem({
   const isActive = node.id === currentNodeId
   const hasChildren = node.children.length > 0
   const hasData = nodeHasData(node, resourceIds)
+
+  const rowRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (isActive) rowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [isActive])
 
   const commitRename = () => {
     setRenaming(false)
@@ -69,7 +77,7 @@ export function TreeItem({
       { title: title.trim(), parent_id: node.id },
       { onSuccess: (created) => navigate(`/node/${created.id}`) }
     )
-    setExpanded(true)
+    expandNodes([node.id])
   }
 
   const handleDelete = () => {
@@ -87,15 +95,16 @@ export function TreeItem({
   return (
     <div>
       <div
-        className={`group flex items-center gap-1 rounded-md py-1 pr-1 text-sm ${
+        ref={rowRef}
+        className={`group flex items-center gap-1 rounded-md border-l-2 py-1 pr-1 text-sm ${
           isActive
-            ? 'bg-surface-hover text-text'
-            : 'text-muted hover:bg-surface-hover hover:text-text'
+            ? 'border-accent bg-accent/10 font-medium text-text'
+            : 'border-transparent text-muted hover:bg-surface-hover hover:text-text'
         }`}
         style={{ paddingLeft: 4 + depth * 14 }}
       >
         <button
-          onClick={() => setExpanded((e) => !e)}
+          onClick={() => toggleNodeExpanded(node.id)}
           className={`h-4 w-4 shrink-0 text-muted ${hasChildren ? '' : 'invisible'}`}
           aria-label="toggle"
         >
@@ -134,7 +143,8 @@ export function TreeItem({
           </button>
         )}
 
-        <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
+        {/* Always visible on touch — there is no hover to reveal them. */}
+        <div className="flex shrink-0 items-center gap-0.5 md:hidden md:group-hover:flex">
           <button
             onClick={handleAddChild}
             className="rounded px-1 text-xs text-muted hover:bg-surface-2 hover:text-text"

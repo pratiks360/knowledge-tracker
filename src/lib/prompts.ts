@@ -43,18 +43,65 @@ facts not present in the material — examples should illustrate it, not contrad
   }
 }
 
-export function detailsNodePrompt(context: string) {
-  return {
-    system: `You are a study assistant. Write a comprehensive, well-structured explainer in Markdown
+export type DetailsLength = 'brief' | 'standard' | 'in-depth'
+
+const DETAILS_LENGTH_GUIDANCE: Record<DetailsLength, string> = {
+  brief:
+    'Keep it concise — a short overview plus the most important points only, roughly 2–4 short sections.',
+  standard:
+    'Aim for a thorough but focused write-up with a handful of well-developed sections.',
+  'in-depth':
+    'Be comprehensive and detailed — cover the topic in depth with multiple sections, nuances, and examples where the sources support them.',
+}
+
+export function detailsNodePrompt(
+  context: string,
+  opts: { length?: DetailsLength; instructions?: string } = {}
+) {
+  const length = opts.length ?? 'standard'
+  const instructions = opts.instructions?.trim()
+
+  let system = `You are a study assistant. Write a comprehensive, well-structured explainer in Markdown
 about the learning topic below, weaving together everything in the provided context — the topic's own
 notes AND any attached resources (web pages, YouTube transcripts). Merge overlapping material from the
 different sources into one coherent piece rather than repeating each source separately.
 
+If a "Topic path" is provided, the topic is a subtopic: scope the explainer to that path and read the
+title relative to its parents rather than as a generic word. E.g. path "Java > Version" means Java's
+release versions and their changelogs — not the concept of versioning in general.
+
 Structure it with clear headings: an overview, the key concepts explained in depth, how the pieces fit
 together, and (if the sources support it) practical examples or applications. Prefer the specifics from
 the provided resources over generic filler. Do not invent facts that contradict the sources; you may add
-widely-known foundational context to connect ideas, but keep it accurate.`,
-    user: context,
+widely-known foundational context to connect ideas, but keep it accurate.
+
+Length: ${DETAILS_LENGTH_GUIDANCE[length]}`
+
+  if (instructions) {
+    system += `\n\nThe user has asked you to focus on the following — prioritize this while still keeping
+the write-up accurate and grounded in the sources:\n${instructions}`
+  }
+
+  return { system, user: context }
+}
+
+export function formatNotesPrompt(notes: string) {
+  return {
+    system: `You are a note editor. The Markdown below is a personal study note. Material has been
+tacked onto the end of it — each appended block starts with an \`<!-- append -->\` HTML comment
+followed by a heading naming where it came from (an AI action, or something the user pasted).
+
+Merge every appended block into the body of the note so the result reads as one coherent document.
+
+Rules:
+- Preserve all substantive information from both the original note and the appended blocks.
+- Fold overlapping or duplicated points together instead of repeating them.
+- Reorganize under clear headings and bullets where it helps; keep the author's own wording where you can.
+- Remove the \`<!-- append -->\` markers, the auto-generated block headings, and the \`---\` rules that
+  separated them.
+- Do not invent facts that aren't in the note.
+- Respond with ONLY the merged Markdown — no code fences, no commentary about what you changed.`,
+    user: notes,
   }
 }
 
@@ -106,10 +153,18 @@ Rules:
   }
 }
 
-export function roadmapPrompt(context: string) {
+export function roadmapPrompt(context: string, online = false) {
+  const freshness = online
+    ? `\n\nYou have live web search available. Today is ${new Date().toISOString().slice(0, 10)}. ` +
+      `Use it to include the very latest releases, versions, tools, and exam objectives in this area as of ` +
+      `today — do not rely only on prior knowledge. CRITICAL: put the facts directly into the JSON values as ` +
+      `plain text. Do NOT include any URLs, markdown links (e.g. [name](http…)), bracketed source names, ` +
+      `footnotes, or citations of any kind anywhere in the response — they break JSON parsing. Keep every ` +
+      `"description" to one short plain sentence.`
+    : ''
   return {
     system: `You are a curriculum designer helping structure a personal knowledge graph. Given the
-context of a topic, propose an ordered learning roadmap of subtopics to add underneath it.
+context of a topic, propose an ordered learning roadmap of subtopics to add underneath it.${freshness}
 
 Respond with ONLY a JSON array, no markdown fences, no commentary. Each item:
 {"title": string, "description": string, "prerequisites": string[], "children": [...same shape...]}
@@ -120,7 +175,19 @@ Rules:
 - Order items in the array in the sequence they should be learned.
 - Nest closely related sub-subtopics under "children" (max 2 levels of nesting).
 - Keep titles short (2-6 words). Keep descriptions to one sentence.
-- Propose 4-10 top-level items unless the topic clearly warrants fewer.`,
+- Propose 4-10 top-level items unless the topic clearly warrants fewer.
+- If the topic is a certification or exam (e.g. "CCDAK", "Terraform Associate", "AWS Certified
+  Developer", "CKA"), structure the top level around that certification's official exam domains /
+  objectives — use the domain names as the top-level items and nest each domain's key subtopics under
+  it — so the roadmap maps directly to what the exam tests.
+- If the context includes a "Source outline" the user pasted (e.g. exported from roadmap.sh), treat it
+  as the backbone of the roadmap: reorganize it into a clean, ordered hierarchy, group related items,
+  remove obvious noise/duplicates, and fill only clear gaps. Preserve the user's substantive items —
+  do not drop them or replace the outline with a generic roadmap of your own.
+- If the context lists existing subtopics, treat them as already present: do NOT propose duplicates
+  or near-duplicates of them. Only add what is genuinely missing — both gaps in the existing coverage
+  AND newly released or recent additions to the field (new versions, tools, techniques, standards)
+  that aren't already listed. If nothing meaningful is missing, it's fine to propose fewer items.`,
     user: context,
   }
 }
@@ -132,6 +199,82 @@ ${webSearchEnabled ? 'You have web search available — use it for up-to-date or
 
 ## Context
 ${context}`
+}
+
+export function dashboardChatSystemPrompt(context: string, webSearchEnabled: boolean) {
+  return `You are the study coach for the user's personal knowledge graph — a single learner's tree of
+topics they're working through. Unlike the per-topic chat, you can see their WHOLE graph, so you can
+answer across topics, talk about overall progress, help them decide what to learn next, and give them
+a genuine push when they're stalling.
+
+Tone: warm, direct, and encouraging without being saccharine. Celebrate real progress, and when they're
+behind, be honest and constructive rather than scolding. Skip the empty cheerleading — point at
+something specific in their graph.
+
+You can also help them plan a NEW roadmap by talking it through: ask about their goal, timeline, and
+current level, then sketch the SHAPE of the plan — the handful of areas it breaks into and roughly what
+order — in a few short lines.
+
+CRITICAL: do not write the roadmap out as chat text. No week-by-week schedules, no long nested bullet
+lists of every subtopic. A separate roadmap builder turns this conversation into a real, editable tree
+of topics in their graph, and duplicating it in chat just gives them a wall of text they can't act on.
+Keep your replies short — a few sentences. When the plan feels settled, tell them to hit
+"Build roadmap" (or say "create the roadmap") and the tree will be generated for review.
+
+They're chatting from the dashboard, which is also where they add things, so it's worth knowing:
+they can paste an outline (e.g. from roadmap.sh) into the composer to import it, and they can type
+"add topic: <name>" to file a single topic without a conversation.
+
+${webSearchEnabled ? 'You have web search available — use it for up-to-date or external facts.' : 'Do not invent facts beyond the given context and general knowledge.'}
+
+## The user's knowledge graph
+${context}`
+}
+
+/**
+ * Turns a planning conversation into a root topic + roadmap tree. Separate from
+ * roadmapPrompt because the source is a dialogue (with the user's own constraints
+ * scattered through it) and the roadmap must be deduped against the whole graph,
+ * not just one topic's children.
+ */
+export function roadmapFromChatPrompt(
+  conversation: string,
+  existingTree: string,
+  online = false
+) {
+  const freshness = online
+    ? `\n\nYou have live web search available. Today is ${new Date().toISOString().slice(0, 10)}. ` +
+      `Use it so the roadmap reflects the latest releases, versions, tools, and exam objectives. ` +
+      `CRITICAL: put facts directly into the JSON values as plain text. Do NOT include URLs, markdown ` +
+      `links, bracketed source names, footnotes, or citations anywhere — they break JSON parsing.`
+    : ''
+  return {
+    system: `You are a curriculum designer. The user has been talking through what they want to learn.
+Turn that conversation into a learning roadmap.${freshness}
+
+Respond with ONLY a JSON object, no markdown fences, no commentary:
+{"title": string, "nodes": [{"title": string, "description": string, "prerequisites": string[], "children": [...same shape...]}]}
+
+Rules:
+- "title" is the name for the root topic this roadmap hangs under — short (2-5 words), drawn from what
+  the user actually said they want to learn.
+- "nodes" is the ordered roadmap underneath that root. Order items in the sequence they should be learned.
+- "prerequisites" lists exact "title" strings of OTHER items in this same proposal (empty if none).
+- Nest closely related sub-subtopics under "children" (max 2 levels of nesting).
+- Keep titles short (2-6 words). Keep descriptions to one sentence.
+- Propose 4-10 top-level items unless the conversation clearly warrants fewer.
+- Honour what the user asked for in the conversation — their stated goal, level, timeline, and any
+  areas they said to include or skip. The conversation outranks your own idea of a standard roadmap.
+- If they're targeting a certification or exam, structure the top level around that exam's official
+  domains and nest each domain's subtopics under it.
+- The user's EXISTING topics are listed below. Do NOT propose duplicates or near-duplicates of topics
+  they already have anywhere in their graph — they've already got those. Build around them: only
+  propose what is genuinely missing. If an existing topic is a prerequisite for something you propose,
+  you may reference it in "prerequisites" even though you're not re-proposing it.`,
+    user: `## Conversation\n${conversation}\n\n## The user's existing topics (do not re-propose these)\n${
+      existingTree || '(none yet — this is their first roadmap)'
+    }`,
+  }
 }
 
 export function reduceSummariesPrompt(title: string, partialSummaries: string[]) {

@@ -63,10 +63,19 @@ export function useMergeRoadmap(targetNodeId: string) {
         return targetNodeId
       }
 
-      // Preserve top-down order so parents are created before children.
-      const ordered = [...selected].sort(
-        (a, b) => a.key.split('-').length - b.key.split('-').length
-      )
+      // Preserve top-down order so parents are created before children. Depth is
+      // walked via parentKey rather than parsed out of the key string, so keys
+      // added by the preview editor order correctly too.
+      const depthOf = (f: FlatProposalNode): number => {
+        let depth = 0
+        let cursor = f.parentKey
+        while (cursor && depth < flat.length) {
+          depth++
+          cursor = byKey.get(cursor)?.parentKey ?? null
+        }
+        return depth
+      }
+      const ordered = [...selected].sort((a, b) => depthOf(a) - depthOf(b))
 
       // Track order_index per resolved DB parent.
       const orderCounters = new Map<string, number>()

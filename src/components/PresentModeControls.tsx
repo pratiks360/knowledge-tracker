@@ -35,6 +35,10 @@ export function PresentModeControls({ node, allNodes }: { node: NodeRow; allNode
           />
           Show this topic in Present mode
         </label>
+        <p className="-mt-1 text-xs text-muted">
+          If no topics are marked, Present mode shows all of them. Mark one or more to present just
+          that subset.
+        </p>
 
         <div>
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">

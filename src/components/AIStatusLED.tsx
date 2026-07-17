@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAIConfig } from '@/lib/queries/settings'
 import { useSaveUserSettings } from '@/lib/queries/settings'
-import { useAIHealth, useAliveModels } from '@/lib/queries/aiHealth'
+import { useAIHealth, useAliveModels, useProviderModels } from '@/lib/queries/aiHealth'
 import type { UserSettingsRow } from '@/types/db'
 
 export function AIStatusLED() {
@@ -13,6 +13,7 @@ export function AIStatusLED() {
 
   const down = !!cfg && health.data?.ok === false
   const alive = useAliveModels(down && open)
+  const models = useProviderModels(!!cfg && open)
 
   // LED colour by state.
   let color = 'bg-muted' // not configured
@@ -33,8 +34,12 @@ export function AIStatusLED() {
     }
   }
 
-  const modelField: 'selected_model' | 'nvidia_model' =
-    cfg?.provider === 'nvidia' ? 'nvidia_model' : 'selected_model'
+  const modelField: 'selected_model' | 'nvidia_model' | 'cloudflare_model' =
+    cfg?.provider === 'nvidia'
+      ? 'nvidia_model'
+      : cfg?.provider === 'cloudflare'
+        ? 'cloudflare_model'
+        : 'selected_model'
 
   const switchTo = (modelId: string) => {
     saveSettings.mutate({ [modelField]: modelId } as Partial<UserSettingsRow>)
@@ -74,9 +79,31 @@ export function AIStatusLED() {
 
           {cfg && (
             <>
-              <p className="mb-2 truncate text-xs text-muted" title={cfg.model}>
-                Model: <span className="text-text">{cfg.model}</span>
-              </p>
+              <label className="mb-2 block">
+                <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted">
+                  Model
+                </span>
+                <select
+                  value={cfg.model}
+                  onChange={(e) => switchTo(e.target.value)}
+                  disabled={saveSettings.isPending}
+                  title={cfg.model}
+                  className="w-full truncate rounded border border-border bg-surface px-2 py-1 text-xs text-text outline-none focus:border-accent disabled:opacity-50"
+                >
+                  {/* Ensure the current model is always selectable, even before/if the list loads. */}
+                  {!models.data?.some((m) => m.id === cfg.model) && (
+                    <option value={cfg.model}>{cfg.model}</option>
+                  )}
+                  {models.data?.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                {models.isFetching && (
+                  <span className="mt-1 block text-[11px] text-muted">Loading models…</span>
+                )}
+              </label>
 
               {health.data && (
                 <p className="mb-2 text-[11px] text-muted">

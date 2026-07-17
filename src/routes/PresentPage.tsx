@@ -24,9 +24,9 @@ export function PresentPage() {
   if (presentNodes.length === 0) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-bg text-center">
-        <p className="text-sm text-muted">No topics are marked visible in Present mode yet.</p>
+        <p className="text-sm text-muted">No topics to present yet.</p>
         <p className="text-sm text-muted">
-          Open a topic and toggle &quot;Show this topic in Present mode&quot; to add it here.
+          Create a topic — Present mode shows all of them by default.
         </p>
         <Link to="/" className="text-sm text-accent hover:underline">
           Back to dashboard

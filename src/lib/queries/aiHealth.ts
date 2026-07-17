@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { listModels, isFreeModel, pingModel } from '@/lib/ai'
+import { listModels, isFreeModel, pingModel, providerListsModels } from '@/lib/ai'
 import { useAIConfig } from '@/lib/queries/settings'
 
 // Check every 5 minutes so we barely touch the free-tier quota.
@@ -30,6 +30,30 @@ export function useAIHealth() {
 }
 
 /**
+ * Loads the selectable model list for the active provider (free-only for
+ * OpenRouter). Runs only while `enabled` so we don't fetch on every render —
+ * the caller enables it when the quick-switch menu is open.
+ */
+export function useProviderModels(enabled: boolean) {
+  const cfg = useAIConfig()
+  return useQuery<{ id: string; name: string }[]>({
+    queryKey: ['ai-models', cfg?.provider, cfg?.apiKey],
+    // Cloudflare has no /models endpoint — skip the fetch (model is entered manually in Settings).
+    enabled: enabled && !!cfg && providerListsModels(cfg.provider),
+    staleTime: HEALTH_INTERVAL_MS,
+    refetchOnWindowFocus: false,
+    retry: false,
+    queryFn: async () => {
+      const models = await listModels(cfg!.apiKey, cfg!.baseUrl, cfg!.provider)
+      const filtered = cfg!.provider === 'openrouter' ? models.filter(isFreeModel) : models
+      return filtered
+        .map((m) => ({ id: m.id, name: m.name ?? m.id }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    },
+  })
+}
+
+/**
  * Only runs when `enabled` (i.e. the current model is down). Pings other free
  * models and returns the ids that respond, so the user can switch to a live one.
  */
@@ -37,7 +61,7 @@ export function useAliveModels(enabled: boolean) {
   const cfg = useAIConfig()
   return useQuery<string[]>({
     queryKey: ['ai-alive', cfg?.provider, cfg?.model],
-    enabled: enabled && !!cfg,
+    enabled: enabled && !!cfg && providerListsModels(cfg.provider),
     staleTime: HEALTH_INTERVAL_MS,
     refetchOnWindowFocus: false,
     retry: false,

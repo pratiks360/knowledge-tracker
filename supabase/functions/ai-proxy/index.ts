@@ -20,7 +20,16 @@ const CORS = {
 
 // Only providers that actually need a proxy. OpenRouter works browser-direct.
 const ALLOWED_BASES = new Set(['https://integrate.api.nvidia.com/v1'])
+// Cloudflare Workers AI is account-scoped, so its base varies per user — allow it by pattern
+// (a 32-hex account id) rather than an exact string, so the proxy still can't relay to arbitrary URLs.
+const ALLOWED_BASE_PATTERNS = [
+  /^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/[a-f0-9]{32}\/ai\/v1$/,
+]
 const ALLOWED_PATHS = new Set(['/models', '/chat/completions'])
+
+function isAllowedBase(base: string): boolean {
+  return ALLOWED_BASES.has(base) || ALLOWED_BASE_PATTERNS.some((re) => re.test(base))
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
@@ -55,7 +64,7 @@ Deno.serve(async (req: Request) => {
 
     const base = String(body.base ?? '')
     const path = String(body.path ?? '')
-    if (!ALLOWED_BASES.has(base)) return json({ error: 'Provider base not allowed' }, 400)
+    if (!isAllowedBase(base)) return json({ error: 'Provider base not allowed' }, 400)
     if (!ALLOWED_PATHS.has(path)) return json({ error: 'Path not allowed' }, 400)
 
     const isModels = path === '/models'

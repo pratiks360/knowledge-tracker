@@ -4,6 +4,7 @@ import { useAIConfig } from '@/lib/queries/settings'
 import { useUpdateNode } from '@/lib/queries/nodes'
 import { useResources } from '@/lib/queries/resources'
 import { chatText, AIError } from '@/lib/ai'
+import { appendBlock } from '@/lib/notes'
 import { summarizeNodePrompt, simplifyNodePrompt, examplesNodePrompt } from '@/lib/prompts'
 import type { NodeRow, ResourceRow } from '@/types/db'
 
@@ -40,6 +41,7 @@ export function NodeAIActions({ node }: { node: NodeRow }) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [appended, setAppended] = useState(false)
 
   const configured = !!aiConfig
 
@@ -47,6 +49,7 @@ export function NodeAIActions({ node }: { node: NodeRow }) {
     setActive(action)
     setResult(null)
     setError(null)
+    setAppended(false)
     if (!aiConfig) return
     setLoading(true)
     try {
@@ -61,10 +64,19 @@ export function NodeAIActions({ node }: { node: NodeRow }) {
   }
 
   const appendToNotes = () => {
-    if (!result) return
-    const heading = `\n\n---\n### ${LABELS[active!]}\n\n${result}`
-    updateNode.mutate({ id: node.id, patch: { notes_md: (node.notes_md ?? '') + heading } })
-    setActive(null)
+    if (!result || !active) return
+    setError(null)
+    updateNode.mutate(
+      { id: node.id, patch: { notes_md: appendBlock(node.notes_md, LABELS[active], result) } },
+      {
+        onSuccess: () => {
+          setActive(null)
+          setResult(null)
+          setAppended(true)
+        },
+        onError: () => setError('Could not save to notes. Try again.'),
+      }
+    )
   }
 
   return (
@@ -80,6 +92,13 @@ export function NodeAIActions({ node }: { node: NodeRow }) {
           </button>
         ))}
       </div>
+
+      {appended && (
+        <p className="mt-2 text-xs text-muted">
+          Added to the <span className="text-text">Notes</span> tab — open it to merge it in with{' '}
+          <span className="text-text">Format</span>.
+        </p>
+      )}
 
       {active && (
         <div className="mt-3 rounded-lg border border-border bg-surface-2 p-3">
@@ -100,9 +119,10 @@ export function NodeAIActions({ node }: { node: NodeRow }) {
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={appendToNotes}
-                  className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-bg"
+                  disabled={updateNode.isPending}
+                  className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-bg disabled:opacity-50"
                 >
-                  Append to notes
+                  {updateNode.isPending ? 'Saving…' : 'Append to notes'}
                 </button>
                 <button
                   onClick={() => setActive(null)}

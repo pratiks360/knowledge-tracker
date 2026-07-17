@@ -1,15 +1,31 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useNodes, computeProgress } from '@/lib/queries/nodes'
 import { ProgressRing } from '@/components/ProgressRing'
 import { AutoPlacementDialog } from '@/components/AutoPlacementDialog'
+import { RoadmapQuickAdd } from '@/components/roadmap/RoadmapQuickAdd'
+import { RoadmapFromChat } from '@/components/roadmap/RoadmapFromChat'
+import { DashboardChat } from '@/components/DashboardChat'
+import type { ChatMessageRow } from '@/types/db'
 
 const REVIEW_DUE_DAYS = 14
 
 export function DashboardPage() {
   const { data: nodes, isLoading } = useNodes()
   const navigate = useNavigate()
-  const [quickAdd, setQuickAdd] = useState('')
+  // The coach owns which conversation is open; the roadmap builder needs whatever
+  // is currently on screen, so the active thread's messages come back up to here.
+  const [chatMessages, setChatMessages] = useState<ChatMessageRow[]>([])
+  const handleActiveMessages = useCallback((m: ChatMessageRow[]) => setChatMessages(m), [])
+  // Roadmap built from a pasted outline…
+  const [roadmapInput, setRoadmapInput] = useState<{
+    title: string
+    sourceOutline?: string
+    webSearch?: boolean
+  } | null>(null)
+  // …or from the coach conversation.
+  const [chatRoadmap, setChatRoadmap] = useState<{ webSearch: boolean } | null>(null)
+  // Single topic via "add topic: X" in the coach.
   const [placementTitle, setPlacementTitle] = useState<string | null>(null)
 
   const roots = useMemo(() => (nodes ?? []).filter((n) => !n.parent_id), [nodes])
@@ -33,31 +49,15 @@ export function DashboardPage() {
       .slice(0, 6)
   }, [nodes])
 
-  const handleQuickAdd = (e: React.FormEvent) => {
-    e.preventDefault()
-    const title = quickAdd.trim()
-    if (!title) return
-    setPlacementTitle(title)
-    setQuickAdd('')
-  }
-
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <form onSubmit={handleQuickAdd} className="mb-8 flex gap-2">
-        <input
-          value={quickAdd}
-          onChange={(e) => setQuickAdd(e.target.value)}
-          placeholder="Quick-add a topic… (e.g. Distributed Systems)"
-          className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-text outline-none focus:border-accent"
-        />
-        <button
-          type="submit"
-          disabled={!quickAdd.trim()}
-          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-bg disabled:opacity-50"
-        >
-          Add
-        </button>
-      </form>
+    <div className="mx-auto max-w-5xl p-4 sm:p-6">
+      <DashboardChat
+        allNodes={nodes ?? []}
+        onBuildRoadmap={(webSearch) => setChatRoadmap({ webSearch })}
+        onImportOutline={setRoadmapInput}
+        onAddTopic={setPlacementTitle}
+        onActiveMessages={handleActiveMessages}
+      />
 
       {placementTitle && (
         <AutoPlacementDialog
@@ -70,9 +70,34 @@ export function DashboardPage() {
         />
       )}
 
+      {chatRoadmap && (
+        <RoadmapFromChat
+          messages={chatMessages}
+          webSearch={chatRoadmap.webSearch}
+          onClose={() => setChatRoadmap(null)}
+          onDone={(nodeId) => {
+            setChatRoadmap(null)
+            navigate(`/node/${nodeId}`)
+          }}
+        />
+      )}
+
+      {roadmapInput && (
+        <RoadmapQuickAdd
+          title={roadmapInput.title}
+          sourceOutline={roadmapInput.sourceOutline}
+          webSearch={roadmapInput.webSearch}
+          onClose={() => setRoadmapInput(null)}
+          onDone={(nodeId) => {
+            setRoadmapInput(null)
+            navigate(`/node/${nodeId}`)
+          }}
+        />
+      )}
+
       {reviewDue.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
             Review due
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -80,7 +105,7 @@ export function DashboardPage() {
               <Link
                 key={n.id}
                 to={`/node/${n.id}`}
-                className="rounded-md border border-warning/30 bg-warning/10 px-3 py-1.5 text-sm text-text hover:bg-warning/20"
+                className="rounded-md border border-warning/30 bg-warning/10 px-3 py-1.5 text-sm text-text transition hover:bg-warning/20"
               >
                 {n.title}
               </Link>
@@ -91,7 +116,7 @@ export function DashboardPage() {
 
       {continueLearning.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
             Continue learning
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -99,7 +124,7 @@ export function DashboardPage() {
               <Link
                 key={n.id}
                 to={`/node/${n.id}`}
-                className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text hover:bg-surface-hover"
+                className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-text transition hover:bg-surface-hover"
               >
                 {n.title}
               </Link>
@@ -109,11 +134,11 @@ export function DashboardPage() {
       )}
 
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">Topics</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">Topics</h2>
         {isLoading && <p className="text-sm text-muted">Loading…</p>}
         {!isLoading && roots.length === 0 && (
           <p className="text-sm text-muted">
-            No topics yet. Use the box above to add your first one.
+            No topics yet — tell the coach what you want to learn, and build a roadmap from there.
           </p>
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -123,7 +148,7 @@ export function DashboardPage() {
               <Link
                 key={n.id}
                 to={`/node/${n.id}`}
-                className="flex items-center gap-4 rounded-lg border border-border bg-surface p-4 transition hover:bg-surface-hover"
+                className="flex items-center gap-4 rounded-lg border border-border bg-surface p-4 transition hover:border-accent/40 hover:bg-surface-hover"
               >
                 <ProgressRing progress={progress} />
                 <div className="min-w-0">

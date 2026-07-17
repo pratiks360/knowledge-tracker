@@ -2,27 +2,128 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --color-bg: #0b0d12;
-  --color-surface: #12151c;
-  --color-surface-2: #181c26;
-  --color-surface-hover: #1f2430;
-  --color-border: rgba(255, 255, 255, 0.08);
+/* Palette notes — this is a read-for-hours app, so both themes deliberately pull
+   back from maximum contrast. Pure black on pure white (and its dark inverse)
+   causes halation and eye strain over a study session; the surfaces below sit a
+   few points off the extremes and carry a slight blue cast so long stretches of
+   prose stay comfortable without looking washed out. */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
 
-  --color-text: #e8eaf0;
-  --color-muted: #8a8fa3;
+  --color-bg: #101319;
+  --color-surface: #161a22;
+  --color-surface-2: #1c212b;
+  --color-surface-hover: #242a36;
+  --color-border: rgba(255, 255, 255, 0.09);
 
-  --color-accent: #6ea8fe;
+  /* Off-white rather than #fff: 14.5:1 on --color-bg, still far past WCAG AA. */
+  --color-text: #dfe3ec;
+  /* 6.6:1 — muted is used for real content (descriptions), not just decoration. */
+  --color-muted: #949aad;
+
+  --color-accent: #7cb0ff;
   --color-accent-2: #7ee2c4;
 
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
+  --color-success: #5ddc93;
+  --color-warning: #f0b342;
+  --color-error: #f98a8a;
 
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-xl: 24px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Warm off-white; white page + white cards left nothing to separate them. */
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef0f4;
+  --color-surface-hover: #e3e7ee;
+  --color-border: rgba(15, 23, 42, 0.11);
+
+  /* Near-black, not black — softer for long reading, 15.9:1 on --color-surface. */
+  --color-text: #1e222b;
+  /* 6.2:1 on --color-surface. */
+  --color-muted: #5a6170;
+
+  --color-accent: #2563eb;
+  --color-accent-2: #0d9488;
+
+  --color-success: #16a34a;
+  --color-warning: #b45309;
+  --color-error: #dc2626;
+}
+
+/* Drive Tailwind Typography from the theme tokens so `.prose` content stays
+   legible in both light and dark. Replaces the static `prose-invert` variant. */
+.prose {
+  --tw-prose-body: var(--color-text);
+  --tw-prose-headings: var(--color-text);
+  --tw-prose-lead: var(--color-muted);
+  --tw-prose-links: var(--color-accent);
+  --tw-prose-bold: var(--color-text);
+  --tw-prose-counters: var(--color-muted);
+  --tw-prose-bullets: var(--color-border);
+  --tw-prose-hr: var(--color-border);
+  --tw-prose-quotes: var(--color-text);
+  --tw-prose-quote-borders: var(--color-border);
+  --tw-prose-captions: var(--color-muted);
+  --tw-prose-code: var(--color-text);
+  --tw-prose-pre-code: var(--color-text);
+  --tw-prose-pre-bg: var(--color-surface-2);
+  --tw-prose-th-borders: var(--color-border);
+  --tw-prose-td-borders: var(--color-border);
+  overflow-wrap: break-word;
+}
+
+/* Keep wide AI-generated content (code blocks, tables) inside its column
+   instead of spilling horizontally over neighbouring panels. */
+.prose :where(pre, table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Reading rhythm for study material. Tailwind Typography's defaults are tuned for
+   marketing pages; these loosen the line-height and give headings room to act as
+   scan targets when you're skimming back through a topic. */
+.prose {
+  line-height: 1.7;
+}
+
+.prose :where(h1, h2, h3, h4) {
+  font-family: 'Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* More space above a heading than below it, so each heading groups with the text
+   it introduces instead of floating between two blocks. */
+.prose :where(h2, h3) {
+  margin-top: 1.8em;
+  margin-bottom: 0.6em;
+}
+
+.prose :where(li) {
+  margin-top: 0.3em;
+  margin-bottom: 0.3em;
+}
+
+.prose :where(code):not(:where(pre code)) {
+  background: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+  padding: 0.12em 0.35em;
+  font-weight: 500;
+}
+
+/* Tailwind Typography adds these around inline code; they read as literal
+   backticks once the code has its own background. */
+.prose :where(code):not(:where(pre code))::before,
+.prose :where(code):not(:where(pre code))::after {
+  content: none;
 }
 
 * {
@@ -40,11 +141,13 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family:
+    'Inter Variable',
     'Inter',
     system-ui,
     -apple-system,
     sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 a {

@@ -12,19 +12,24 @@ import {
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { StatusToggle } from '@/components/StatusToggle'
 import { ProgressRing } from '@/components/ProgressRing'
-import { MarkdownEditor } from '@/components/MarkdownEditor'
+import { NotesPanel } from '@/components/notes/NotesPanel'
 import { NodePicker } from '@/components/NodePicker'
 import { FullscreenSpinner } from '@/components/FullscreenSpinner'
 import { NodeAIActions } from '@/components/NodeAIActions'
 import { NodeDetails } from '@/components/NodeDetails'
 import { ResourcesList } from '@/components/resources/ResourcesList'
+import { useResources } from '@/lib/queries/resources'
 import { ChatPanel } from '@/components/ChatPanel'
+import { TagEditor } from '@/components/TagEditor'
 import { RoadmapGenerator } from '@/components/roadmap/RoadmapGenerator'
 import { RelatedLinksPanel } from '@/components/RelatedLinksPanel'
 import { RecapCard } from '@/components/RecapCard'
 import { isNodeStale } from '@/lib/staleness'
+import { countPendingAppends } from '@/lib/notes'
 import { QuizPanel } from '@/components/quiz/QuizPanel'
 import { PresentModeControls } from '@/components/PresentModeControls'
+
+type TabKey = 'details' | 'sources' | 'notes' | 'subtopics'
 
 export function NodePage() {
   const { id } = useParams<{ id: string }>()
@@ -35,6 +40,8 @@ export function NodePage() {
   const createNode = useCreateNode()
   const touchVisited = useTouchLastVisited()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [tab, setTab] = useState<TabKey>('details')
+  const { data: resources } = useResources(id)
 
   const node = nodes?.find((n) => n.id === id)
   const nodeLoaded = !!node
@@ -83,9 +90,10 @@ export function NodePage() {
   }
 
   return (
-    <div className="flex h-full">
-      <div className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto p-6">
-        <div className="mb-4 flex items-start justify-between gap-4">
+    <div className="flex h-full min-w-0">
+      <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="mx-auto w-full max-w-3xl">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <Breadcrumbs ancestors={ancestors} current={node} />
           <div className="flex shrink-0 gap-2">
             <button
@@ -103,88 +111,138 @@ export function NodePage() {
           </div>
         </div>
 
-        <div className="mb-6 flex items-center gap-4">
+        <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3">
           <ProgressRing progress={progress} size={48} />
-          <h1 className="font-display flex-1 text-2xl font-semibold text-text">{node.title}</h1>
+          <h1 className="font-display min-w-0 flex-1 break-words text-xl font-semibold text-text sm:text-2xl">
+            {node.title}
+          </h1>
           <StatusToggle
             value={node.status}
             onChange={(status) => updateNode.mutate({ id: node.id, patch: { status } })}
           />
         </div>
 
-        {node.description && <p className="mb-6 text-sm text-muted">{node.description}</p>}
+        {node.description && <p className="mb-3 text-sm text-muted">{node.description}</p>}
+
+        <TagEditor node={node} />
 
         {wasStale && <RecapCard node={node} />}
 
-        <section className="mb-8">
-          <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
-            AI actions
-          </h2>
-          <div className="flex flex-wrap items-start gap-2">
-            <NodeAIActions node={node} />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <RoadmapGenerator node={node} />
-            <QuizPanel node={node} />
-          </div>
-        </section>
+        {/* Tabs */}
+        <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+          {(
+            [
+              ['details', 'Details'],
+              ['sources', 'Sources'],
+              ['notes', 'Notes'],
+              ['subtopics', 'Subtopics'],
+            ] as [TabKey, string][]
+          ).map(([key, label]) => {
+            const count =
+              key === 'sources'
+                ? resources?.length
+                : key === 'subtopics'
+                  ? children.length
+                  : key === 'notes'
+                    ? countPendingAppends(node.notes_md)
+                    : undefined
+            return (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  tab === key
+                    ? 'border-accent text-text'
+                    : 'border-transparent text-muted hover:text-text'
+                }`}
+              >
+                {label}
+                {count ? <span className="ml-1.5 text-xs text-muted">{count}</span> : null}
+              </button>
+            )
+          })}
+        </div>
 
-        <section className="mb-8">
-          <NodeDetails node={node} />
-        </section>
+        {tab === 'details' && (
+          <>
+            <section className="mb-8">
+              <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
+                AI actions
+              </h2>
+              <div className="flex flex-wrap items-start gap-2">
+                <NodeAIActions node={node} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <RoadmapGenerator node={node} allNodes={nodes!} />
+                <QuizPanel node={node} />
+              </div>
+            </section>
 
-        <section className="mb-8">
-          <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">Resources</h2>
-          <ResourcesList nodeId={node.id} />
-        </section>
+            <section className="mb-8">
+              <NodeDetails node={node} ancestors={ancestors} />
+            </section>
+          </>
+        )}
 
-        <section className="mb-8">
-          <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">Notes</h2>
-          <MarkdownEditor
-            value={node.notes_md ?? ''}
-            placeholder="Write freeform notes in Markdown…"
-            onSave={(notes_md) => updateNode.mutate({ id: node.id, patch: { notes_md } })}
-          />
-        </section>
+        {tab === 'sources' && (
+          <section className="mb-8">
+            <p className="mb-3 text-sm text-muted">
+              Paste web pages and YouTube videos here. Then use{' '}
+              <span className="text-text">Generate details</span> on the Details tab to merge them
+              into one write-up.
+            </p>
+            <ResourcesList nodeId={node.id} />
+          </section>
+        )}
 
-        <section className="mb-8">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Subtopics</h2>
-            <button
-              onClick={handleAddChild}
-              className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover hover:text-text"
-            >
-              + Add subtopic
-            </button>
-          </div>
-          {children.length === 0 ? (
-            <p className="text-sm text-muted">No subtopics yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {children.map((c) => (
-                <li key={c.id}>
-                  <button
-                    onClick={() => navigate(`/node/${c.id}`)}
-                    className="w-full rounded-md border border-border bg-surface px-3 py-2 text-left text-sm text-text hover:bg-surface-hover"
-                  >
-                    {c.title}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        {tab === 'notes' && (
+          <section className="mb-8">
+            <NotesPanel node={node} />
+          </section>
+        )}
 
-        <section className="mb-8">
-          <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
-            Related topics
-          </h2>
-          <RelatedLinksPanel node={node} allNodes={nodes!} />
-        </section>
+        {tab === 'subtopics' && (
+          <>
+            <section className="mb-8">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Subtopics</h2>
+                <button
+                  onClick={handleAddChild}
+                  className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover hover:text-text"
+                >
+                  + Add subtopic
+                </button>
+              </div>
+              {children.length === 0 ? (
+                <p className="text-sm text-muted">No subtopics yet.</p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {children.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        onClick={() => navigate(`/node/${c.id}`)}
+                        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-left text-sm text-text hover:bg-surface-hover"
+                      >
+                        {c.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
-        <section className="mb-8">
-          <PresentModeControls node={node} allNodes={nodes!} />
-        </section>
+            <section className="mb-8">
+              <h2 className="mb-2 text-sm font-medium uppercase tracking-wide text-muted">
+                Related topics
+              </h2>
+              <RelatedLinksPanel node={node} allNodes={nodes!} />
+            </section>
+
+            <section className="mb-8">
+              <PresentModeControls node={node} allNodes={nodes!} />
+            </section>
+          </>
+        )}
 
         {pickerOpen && (
           <NodePicker
@@ -198,6 +256,7 @@ export function NodePage() {
             }}
           />
         )}
+        </div>
       </div>
 
       <ChatPanel node={node} />

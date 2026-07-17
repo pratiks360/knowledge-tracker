@@ -23,6 +23,8 @@ export type NodeRow = {
   node_kind: NodeKind
   recap_md: string | null
   details_md: string | null
+  details_generated_at: string | null
+  tags: string[]
   last_visited_at: string | null
   created_at: string
   updated_at: string
@@ -50,10 +52,21 @@ export type ResourceRow = {
   created_at: string
 }
 
+/** A named coach conversation on the dashboard. Per-topic chats have no thread. */
+export type ChatThreadRow = {
+  id: string
+  user_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+// Coach messages: node_id null + thread_id set. Per-topic messages: the reverse.
 export type ChatMessageRow = {
   id: string
   user_id: string
-  node_id: string
+  node_id: string | null
+  thread_id: string | null
   role: ChatRole
   content: string
   created_at: string
@@ -91,7 +104,7 @@ export type StoryPathStepRow = {
   step_order: number
 }
 
-export type AIProvider = 'openrouter' | 'nvidia'
+export type AIProvider = 'openrouter' | 'nvidia' | 'cloudflare'
 
 export type UserSettingsRow = {
   user_id: string
@@ -100,6 +113,10 @@ export type UserSettingsRow = {
   selected_model: string | null
   nvidia_api_key: string | null
   nvidia_model: string | null
+  // Cloudflare Workers AI: token + account id (its endpoint URL is account-scoped) + manual model id.
+  cloudflare_api_key: string | null
+  cloudflare_account_id: string | null
+  cloudflare_model: string | null
   owner_email: string | null
   updated_at?: string
 }
@@ -138,6 +155,11 @@ export type Database = {
         Row: ChatMessageRow
         Insert: Partial<ChatMessageRow>
         Update: Partial<ChatMessageRow>
+      } & NoRelationships
+      chat_threads: {
+        Row: ChatThreadRow
+        Insert: Partial<ChatThreadRow>
+        Update: Partial<ChatThreadRow>
       } & NoRelationships
       quizzes: {
         Row: QuizRow

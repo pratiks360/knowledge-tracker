@@ -20,8 +20,10 @@ export default {
         error: 'var(--color-error)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif'],
+        // "… Variable" is the family name @fontsource-variable registers; the plain
+        // names stay as fallbacks for anyone with the static font installed locally.
+        sans: ['Inter Variable', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         sm: 'var(--radius-sm)',

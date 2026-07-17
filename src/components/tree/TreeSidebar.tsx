@@ -1,17 +1,31 @@
+import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useNodes, useCreateNode, buildTree } from '@/lib/queries/nodes'
+import { useNodes, useCreateNode, buildTree, getAncestors } from '@/lib/queries/nodes'
 import { useNodeIdsWithResources } from '@/lib/queries/resources'
 import { TreeItem } from '@/components/tree/TreeItem'
 import { useUIStore } from '@/lib/store'
 
-export function TreeSidebar() {
+/**
+ * `drawer` is the mobile off-canvas presentation: it ignores the desktop
+ * collapse state (a 40px rail inside a drawer is nonsense) and swaps the
+ * collapse control for a close control.
+ */
+export function TreeSidebar({ variant = 'docked' }: { variant?: 'docked' | 'drawer' }) {
   const { data: nodes, isLoading } = useNodes()
   const { data: resourceIds } = useNodeIdsWithResources()
   const { id: currentNodeId } = useParams()
   const navigate = useNavigate()
   const createNode = useCreateNode()
-  const { sidebarCollapsed, toggleSidebar } = useUIStore()
+  const { sidebarCollapsed, toggleSidebar, expandNodes, setMobileNavOpen } = useUIStore()
+  const isDrawer = variant === 'drawer'
   const resourceIdSet = resourceIds ?? new Set<string>()
+
+  // Reveal the current topic: expand its ancestors, leaving everything else as-is.
+  useEffect(() => {
+    if (!nodes || !currentNodeId) return
+    const chain = getAncestors(nodes, currentNodeId).map((n) => n.id)
+    if (chain.length > 0) expandNodes(chain)
+  }, [nodes, currentNodeId, expandNodes])
 
   const handleAddRoot = () => {
     const title = window.prompt('New root topic title')
@@ -22,7 +36,7 @@ export function TreeSidebar() {
     )
   }
 
-  if (sidebarCollapsed) {
+  if (sidebarCollapsed && !isDrawer) {
     return (
       <div className="flex w-10 shrink-0 flex-col items-center border-r border-border py-3">
         <button
@@ -39,7 +53,12 @@ export function TreeSidebar() {
   const tree = nodes ? buildTree(nodes) : []
 
   return (
-    <div className="flex w-64 shrink-0 flex-col border-r border-border">
+    <div
+      className={`flex shrink-0 flex-col border-r border-border ${
+        // The drawer is capped against the viewport so it can't overflow a narrow phone.
+        isDrawer ? 'h-full w-[min(17rem,85vw)]' : 'w-64'
+      }`}
+    >
       <div className="flex items-center justify-between px-3 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wide text-muted">Topics</span>
         <div className="flex items-center gap-1">
@@ -51,11 +70,11 @@ export function TreeSidebar() {
             + New
           </button>
           <button
-            onClick={toggleSidebar}
+            onClick={() => (isDrawer ? setMobileNavOpen(false) : toggleSidebar())}
             className="rounded px-1 text-xs text-muted hover:bg-surface-hover hover:text-text"
-            title="Collapse sidebar"
+            title={isDrawer ? 'Close' : 'Collapse sidebar'}
           >
-            «
+            {isDrawer ? '×' : '«'}
           </button>
         </div>
       </div>

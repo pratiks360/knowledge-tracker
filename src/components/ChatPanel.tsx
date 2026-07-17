@@ -7,6 +7,7 @@ import { useResources } from '@/lib/queries/resources'
 import { useAIConfig } from '@/lib/queries/settings'
 import { useAddManualResource } from '@/lib/queries/resources'
 import { useUIStore } from '@/lib/store'
+import { ChatMessage } from '@/components/ChatMessage'
 
 export function ChatPanel({ node }: { node: NodeRow }) {
   const { chatPanelOpen, toggleChatPanel } = useUIStore()
@@ -52,7 +53,9 @@ export function ChatPanel({ node }: { node: NodeRow }) {
   }
 
   return (
-    <div className="flex w-80 shrink-0 flex-col border-l border-border">
+    // Full-screen sheet on mobile — a 320px docked column would leave the topic
+    // itself unreadable. Docks as a column from md up.
+    <div className="fixed inset-0 z-40 flex flex-col bg-bg md:static md:z-auto md:w-80 md:shrink-0 md:border-l md:border-border md:bg-transparent">
       <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wide text-muted">Chat</span>
         <button
@@ -78,25 +81,16 @@ export function ChatPanel({ node }: { node: NodeRow }) {
         )}
         <div className="flex flex-col gap-3">
           {messages?.map((m) => (
-            <div key={m.id} className={m.role === 'user' ? 'text-right' : ''}>
-              <div
-                className={`inline-block max-w-full rounded-lg px-3 py-2 text-left text-sm ${
-                  m.role === 'user' ? 'bg-accent text-bg' : 'bg-surface-2 text-text'
-                }`}
-              >
-                <pre className="whitespace-pre-wrap font-sans">{m.content}</pre>
-              </div>
+            <ChatMessage key={m.id} role={m.role} content={m.content}>
               {m.role === 'assistant' && (
-                <div>
-                  <button
-                    onClick={() => saveAsResource(m.content)}
-                    className="mt-1 text-xs text-muted hover:text-text"
-                  >
-                    Save as resource
-                  </button>
-                </div>
+                <button
+                  onClick={() => saveAsResource(m.content)}
+                  className="mt-1 text-xs text-muted hover:text-text"
+                >
+                  Save as resource
+                </button>
               )}
-            </div>
+            </ChatMessage>
           ))}
           {sendMessage.isPending && <p className="text-sm text-muted">Thinking…</p>}
         </div>

@@ -1,24 +1,42 @@
 import {
   chunkSummaryPrompt,
   detailsNodePrompt,
+  type DetailsLength,
+  formatNotesPrompt,
   quizPrompt,
   recapPrompt,
   reduceSummariesPrompt,
+  roadmapFromChatPrompt,
   roadmapPrompt,
   summarizeResourcePrompt,
 } from '@/lib/prompts'
 import { supabase } from '@/lib/supabase'
 import type { AIProvider, QuizQuestion } from '@/types/db'
 
-/** OpenAI-compatible base URL per provider. NVIDIA NIM mirrors the OpenAI schema. */
+/**
+ * OpenAI-compatible base URL per provider. NVIDIA NIM mirrors the OpenAI schema.
+ * Cloudflare's endpoint is account-scoped, so its entry here is only a placeholder host —
+ * the real per-account base is built with `cloudflareBase(accountId)` in resolveAIConfig.
+ */
 export const PROVIDER_BASE: Record<AIProvider, string> = {
   openrouter: 'https://openrouter.ai/api/v1',
   nvidia: 'https://integrate.api.nvidia.com/v1',
+  cloudflare: 'https://api.cloudflare.com/client/v4',
+}
+
+/** Cloudflare Workers AI OpenAI-compatible base URL for a given account id. */
+export function cloudflareBase(accountId: string): string {
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`
+}
+
+/** Whether a provider exposes an OpenAI-style /models list. Cloudflare does not — models are entered manually. */
+export function providerListsModels(provider: AIProvider): boolean {
+  return provider !== 'cloudflare'
 }
 
 // Providers whose API blocks browser CORS must be routed through the ai-proxy
 // edge function instead of fetched directly.
-const PROXIED_PROVIDERS: ReadonlySet<AIProvider> = new Set(['nvidia'])
+const PROXIED_PROVIDERS: ReadonlySet<AIProvider> = new Set(['nvidia', 'cloudflare'])
 
 function providerHeaders(apiKey: string): Record<string, string> {
   return {
@@ -215,19 +233,57 @@ function stripCodeFences(raw: string): string {
     .trim()
 }
 
-/** Chat completion that expects a JSON object/array back. Recovers from stray text/fences. */
+/**
+ * Scans for the first JSON array/object in `text`, tracking string/escape state and bracket depth.
+ * Returns the first value that closes cleanly (`complete`) — ignoring any prose/citations that follow,
+ * which `:online` web search likes to append — and, if the value was cut off mid-stream (token cap),
+ * a best-effort `salvaged` array containing every top-level element that did finish.
+ */
+function scanJson(text: string): { complete: string | null; salvaged: string | null } {
+  const start = text.search(/[[{]/)
+  if (start === -1) return { complete: null, salvaged: null }
+  const s = text.slice(start)
+  const open = s[0]
+  let depth = 0
+  let inStr = false
+  let escaped = false
+  let lastElementEnd = -1 // index just past the last top-level element that closed (array only)
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]
+    if (inStr) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') inStr = true
+    else if (ch === '[' || ch === '{') depth++
+    else if (ch === ']' || ch === '}') {
+      depth--
+      if (depth === 1) lastElementEnd = i + 1
+      if (depth === 0) return { complete: s.slice(0, i + 1), salvaged: null }
+    }
+  }
+  // Never returned to depth 0 → truncated. For an array, keep the elements that did complete.
+  const salvaged =
+    open === '[' && lastElementEnd > 0 ? s.slice(0, lastElementEnd).replace(/,\s*$/, '') + ']' : null
+  return { complete: null, salvaged }
+}
+
+/** Chat completion that expects a JSON object/array back. Recovers from stray text/fences/truncation. */
 export async function chatJSON<T = unknown>(opts: ChatOptions): Promise<T> {
   const raw = await chatCompletion(opts)
   const cleaned = stripCodeFences(raw)
   try {
     return JSON.parse(cleaned) as T
   } catch {
-    const match = cleaned.match(/[[{][\s\S]*[\]}]/)
-    if (match) {
+    const { complete, salvaged } = scanJson(cleaned)
+    for (const candidate of [complete, salvaged]) {
+      if (!candidate) continue
       try {
-        return JSON.parse(match[0]) as T
+        return JSON.parse(candidate) as T
       } catch {
-        // fall through
+        // try the next candidate
       }
     }
     throw new AIError(`Could not parse AI JSON response: ${cleaned.slice(0, 200)}`, 'parse_failed')
@@ -280,18 +336,141 @@ export interface RoadmapProposalNode {
   children?: RoadmapProposalNode[]
 }
 
-export async function generateRoadmap(
-  cfg: AIConfig,
-  context: string
-): Promise<RoadmapProposalNode[]> {
-  const { system, user } = roadmapPrompt(context)
-  return chatJSON<RoadmapProposalNode[]>({ ...cfg, system, user, maxTokens: 2500 })
+// Models often nest children under a differently-named key, especially for cert "domains".
+const CHILD_KEYS = ['children', 'subtopics', 'topics', 'items', 'nodes']
+
+/** Coerces one loosely-shaped object into a RoadmapProposalNode, or null if it has no usable title. */
+function coerceNode(raw: unknown): RoadmapProposalNode | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const title = typeof o.title === 'string' ? o.title : typeof o.name === 'string' ? o.name : null
+  if (!title) return null
+  const node: RoadmapProposalNode = { title: title.trim() }
+  if (typeof o.description === 'string') node.description = o.description
+  else if (typeof o.summary === 'string') node.description = o.summary
+  if (Array.isArray(o.prerequisites)) {
+    node.prerequisites = o.prerequisites.filter((p): p is string => typeof p === 'string')
+  }
+  for (const k of CHILD_KEYS) {
+    if (Array.isArray(o[k])) {
+      const kids = (o[k] as unknown[])
+        .map(coerceNode)
+        .filter((n): n is RoadmapProposalNode => n !== null)
+      if (kids.length) node.children = kids
+      break
+    }
+  }
+  return node
 }
 
+/**
+ * Normalizes whatever the model returned into a proposal array. Handles the common deviations from
+ * the requested bare array: a wrapper object like `{ "domains": [...] }` / `{ "roadmap": [...] }`,
+ * or a single root node `{ "title": "CCDAK", "children": [...] }` (whose children are the roadmap,
+ * since the root topic already exists).
+ */
+export function normalizeProposal(raw: unknown): RoadmapProposalNode[] {
+  if (Array.isArray(raw)) {
+    return raw.map(coerceNode).filter((n): n is RoadmapProposalNode => n !== null)
+  }
+  if (raw && typeof raw === 'object') {
+    const o = raw as Record<string, unknown>
+    if (typeof o.title === 'string' || typeof o.name === 'string') {
+      const node = coerceNode(o)
+      return node ? node.children ?? [node] : []
+    }
+    const arr = Object.values(o).find(Array.isArray) as unknown[] | undefined
+    if (arr) return arr.map(coerceNode).filter((n): n is RoadmapProposalNode => n !== null)
+  }
+  return []
+}
+
+export async function generateRoadmap(
+  cfg: AIConfig,
+  context: string,
+  opts: { webSearch?: boolean } = {}
+): Promise<RoadmapProposalNode[]> {
+  // OpenRouter's `:online` suffix runs a live web search before answering, so the
+  // model can surface releases newer than its training cutoff. NVIDIA has no equivalent.
+  const online = !!opts.webSearch && cfg.provider === 'openrouter'
+  const { system, user } = roadmapPrompt(context, online)
+  const model = online ? `${cfg.model}:online` : cfg.model
+  // Cert-domain roadmaps and pasted-outline imports produce larger trees than a plain topic; the
+  // online path needs extra headroom because web-grounded answers run longer and must not truncate
+  // mid-JSON (a cut-off response can't be parsed).
+  const raw = await chatJSON<unknown>({ ...cfg, model, system, user, maxTokens: online ? 5000 : 3200 })
+  // Models don't reliably return the exact bare-array shape (esp. certs → "domains" objects);
+  // normalize so a valid-but-differently-shaped response still yields a tree instead of nothing.
+  return normalizeProposal(raw)
+}
+
+export interface ChatRoadmapProposal {
+  /** Root topic title the roadmap should hang under, drawn from the conversation. */
+  title: string
+  nodes: RoadmapProposalNode[]
+}
+
+/**
+ * Turns a dashboard planning conversation into a root title + roadmap tree,
+ * deduped against every topic the user already has.
+ */
+export async function generateRoadmapFromChat(
+  cfg: AIConfig,
+  conversation: string,
+  existingTree: string,
+  opts: { webSearch?: boolean } = {}
+): Promise<ChatRoadmapProposal> {
+  const online = !!opts.webSearch && cfg.provider === 'openrouter'
+  const { system, user } = roadmapFromChatPrompt(conversation, existingTree, online)
+  const model = online ? `${cfg.model}:online` : cfg.model
+  const raw = await chatJSON<unknown>({
+    ...cfg,
+    model,
+    system,
+    user,
+    maxTokens: online ? 5000 : 3200,
+  })
+
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const title = typeof obj.title === 'string' ? obj.title.trim() : ''
+  // Fall back to normalizing the whole payload: models sometimes drop the wrapper
+  // and return the bare array, or nest the roadmap under a differently-named key.
+  const nodes = normalizeProposal(obj.nodes ?? raw)
+  return { title, nodes }
+}
+
+const DETAILS_MAX_TOKENS: Record<DetailsLength, number> = {
+  brief: 1000,
+  standard: 2500,
+  'in-depth': 4000,
+}
+
+export type { DetailsLength }
+
 /** Comprehensive topic write-up merging notes + resource material. */
-export async function generateNodeDetails(cfg: AIConfig, context: string): Promise<string> {
-  const { system, user } = detailsNodePrompt(context)
-  return chatText({ ...cfg, system, user, maxTokens: 2500 })
+export async function generateNodeDetails(
+  cfg: AIConfig,
+  context: string,
+  opts: { length?: DetailsLength; instructions?: string } = {}
+): Promise<string> {
+  const length = opts.length ?? 'standard'
+  const { system, user } = detailsNodePrompt(context, { length, instructions: opts.instructions })
+  return chatText({ ...cfg, system, user, maxTokens: DETAILS_MAX_TOKENS[length] })
+}
+
+/** Merges appended blocks back into the body of a note, returning the rewritten Markdown. */
+export async function formatNotes(cfg: AIConfig, notes: string): Promise<string> {
+  const { system, user } = formatNotesPrompt(notes)
+  const merged = await chatText({ ...cfg, system, user, maxTokens: 4000 })
+  const trimmed = merged.trim()
+  if (!trimmed) throw new AIError('The model returned an empty note.')
+  return stripCodeFence(trimmed)
+}
+
+/** Models sometimes wrap the whole answer in a ```markdown fence despite being told not to. */
+function stripCodeFence(text: string): string {
+  const match = /^```(?:markdown|md)?\s*\n([\s\S]*)\n```$/.exec(text)
+  return match ? match[1] : text
 }
 
 export async function generateRecap(cfg: AIConfig, context: string): Promise<string> {

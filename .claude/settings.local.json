@@ -19,7 +19,10 @@
       "Bash(npx tsc *)",
       "Bash(npx --yes supabase --version)",
       "Bash(npx supabase *)",
-      "Bash(curl -s \"https://ubsxdqswauvmnfutkrow.supabase.co/rest/v1/user_settings?select=ai_provider,nvidia_api_key,nvidia_model&limit=1\" -H \"apikey: sb_publishable_Jd7ChKCodU6Jm7bQhqeXBw_zvYcgtcj\" -w \"\\\\nHTTP %{http_code}\\\\n\")"
+      "Bash(curl -s \"https://ubsxdqswauvmnfutkrow.supabase.co/rest/v1/user_settings?select=ai_provider,nvidia_api_key,nvidia_model&limit=1\" -H \"apikey: sb_publishable_Jd7ChKCodU6Jm7bQhqeXBw_zvYcgtcj\" -w \"\\\\nHTTP %{http_code}\\\\n\")",
+      "Bash(node -e ' *)",
+      "Bash(npx eslint *)",
+      "PowerShell(npx tsc --noEmit)"
     ]
   }
 }
