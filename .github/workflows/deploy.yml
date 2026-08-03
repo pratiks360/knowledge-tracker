@@ -17,7 +17,11 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - name: Deploy
-        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        # Pin the CLI (58.4.0 = latest-1); 58.4.4 regressed for us. Token/org/project
+        # are read from the env vars below, so an unset secret gives a clear auth error
+        # instead of the "--token missing a value" parse failure.
+        run: npx vercel@58.4.0 deploy --prod --yes
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
