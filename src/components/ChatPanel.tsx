@@ -7,10 +7,13 @@ import { useResources } from '@/lib/queries/resources'
 import { useAIConfig } from '@/lib/queries/settings'
 import { useAddManualResource } from '@/lib/queries/resources'
 import { useUIStore } from '@/lib/store'
+import { useIsDesktop } from '@/lib/useMediaQuery'
 import { ChatMessage } from '@/components/ChatMessage'
+import { ResizeHandle } from '@/components/ResizeHandle'
 
 export function ChatPanel({ node }: { node: NodeRow }) {
-  const { chatPanelOpen, toggleChatPanel } = useUIStore()
+  const { chatPanelOpen, toggleChatPanel, chatWidth, setChatWidth } = useUIStore()
+  const isDesktop = useIsDesktop()
   const { data: messages } = useChatMessages(node.id)
   const { data: allNodes } = useNodes()
   const { data: resources } = useResources(node.id)
@@ -53,9 +56,22 @@ export function ChatPanel({ node }: { node: NodeRow }) {
   }
 
   return (
-    // Full-screen sheet on mobile — a 320px docked column would leave the topic
-    // itself unreadable. Docks as a column from md up.
-    <div className="fixed inset-0 z-40 flex flex-col bg-bg md:static md:z-auto md:w-80 md:shrink-0 md:border-l md:border-border md:bg-transparent">
+    <>
+      {/* Desktop-only drag handle on the panel's left edge. */}
+      {isDesktop && (
+        <ResizeHandle
+          side="left"
+          ariaLabel="Resize chat panel"
+          getWidth={() => chatWidth}
+          onResize={setChatWidth}
+        />
+      )}
+    {/* Full-screen sheet on mobile — a 320px docked column would leave the topic
+        itself unreadable. Docks as a column from md up. */}
+    <div
+      className="fixed inset-0 z-40 flex flex-col bg-bg md:static md:z-auto md:shrink-0 md:border-l md:border-border md:bg-transparent"
+      style={isDesktop ? { width: chatWidth } : undefined}
+    >
       <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wide text-muted">Chat</span>
         <button
@@ -127,5 +143,6 @@ export function ChatPanel({ node }: { node: NodeRow }) {
         </div>
       </form>
     </div>
+    </>
   )
 }

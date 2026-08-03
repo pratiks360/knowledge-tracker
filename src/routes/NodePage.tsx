@@ -18,6 +18,7 @@ import { FullscreenSpinner } from '@/components/FullscreenSpinner'
 import { NodeAIActions } from '@/components/NodeAIActions'
 import { NodeDetails } from '@/components/NodeDetails'
 import { ResourcesList } from '@/components/resources/ResourcesList'
+import { NodeVideos } from '@/components/resources/NodeVideos'
 import { useResources } from '@/lib/queries/resources'
 import { ChatPanel } from '@/components/ChatPanel'
 import { TagEditor } from '@/components/TagEditor'
@@ -29,7 +30,7 @@ import { countPendingAppends } from '@/lib/notes'
 import { QuizPanel } from '@/components/quiz/QuizPanel'
 import { PresentModeControls } from '@/components/PresentModeControls'
 
-type TabKey = 'details' | 'sources' | 'notes' | 'subtopics'
+type TabKey = 'details' | 'sources' | 'videos' | 'notes' | 'subtopics'
 
 export function NodePage() {
   const { id } = useParams<{ id: string }>()
@@ -134,6 +135,7 @@ export function NodePage() {
             [
               ['details', 'Details'],
               ['sources', 'Sources'],
+              ['videos', 'Videos'],
               ['notes', 'Notes'],
               ['subtopics', 'Subtopics'],
             ] as [TabKey, string][]
@@ -141,11 +143,13 @@ export function NodePage() {
             const count =
               key === 'sources'
                 ? resources?.length
-                : key === 'subtopics'
-                  ? children.length
-                  : key === 'notes'
-                    ? countPendingAppends(node.notes_md)
-                    : undefined
+                : key === 'videos'
+                  ? resources?.filter((r) => r.kind === 'youtube').length
+                  : key === 'subtopics'
+                    ? children.length
+                    : key === 'notes'
+                      ? countPendingAppends(node.notes_md)
+                      : undefined
             return (
               <button
                 key={key}
@@ -192,6 +196,12 @@ export function NodePage() {
               into one write-up.
             </p>
             <ResourcesList nodeId={node.id} />
+          </section>
+        )}
+
+        {tab === 'videos' && (
+          <section className="mb-8">
+            <NodeVideos nodeId={node.id} />
           </section>
         )}
 

@@ -16,7 +16,8 @@ export function TreeSidebar({ variant = 'docked' }: { variant?: 'docked' | 'draw
   const { id: currentNodeId } = useParams()
   const navigate = useNavigate()
   const createNode = useCreateNode()
-  const { sidebarCollapsed, toggleSidebar, expandNodes, setMobileNavOpen } = useUIStore()
+  const { sidebarCollapsed, toggleSidebar, expandNodes, setMobileNavOpen, sidebarWidth } =
+    useUIStore()
   const isDrawer = variant === 'drawer'
   const resourceIdSet = resourceIds ?? new Set<string>()
 
@@ -56,8 +57,9 @@ export function TreeSidebar({ variant = 'docked' }: { variant?: 'docked' | 'draw
     <div
       className={`flex shrink-0 flex-col border-r border-border ${
         // The drawer is capped against the viewport so it can't overflow a narrow phone.
-        isDrawer ? 'h-full w-[min(17rem,85vw)]' : 'w-64'
+        isDrawer ? 'h-full w-[min(17rem,85vw)]' : ''
       }`}
+      style={isDrawer ? undefined : { width: sidebarWidth }}
     >
       <div className="flex items-center justify-between px-3 py-2.5">
         <span className="text-xs font-medium uppercase tracking-wide text-muted">Topics</span>

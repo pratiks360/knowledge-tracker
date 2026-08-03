@@ -45,6 +45,67 @@ export function isYoutubeUrl(url: string): boolean {
   }
 }
 
+/** Extracts the 11-char video id from any common YouTube URL form. */
+export function youtubeVideoId(url: string): string | null {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    if (host === 'youtu.be') return u.pathname.slice(1).split('/')[0] || null
+    if (host.endsWith('youtube.com')) {
+      if (u.pathname === '/watch') return u.searchParams.get('v')
+      const m = u.pathname.match(/^\/(embed|shorts|v)\/([^/?]+)/)
+      if (m) return m[2]
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** Best-effort video title via YouTube's public oEmbed endpoint (CORS-open, no key). */
+async function fetchYoutubeTitle(url: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+    )
+    if (res.ok) {
+      const data = await res.json()
+      if (typeof data.title === 'string' && data.title.trim()) return data.title
+    }
+  } catch {
+    // ignore — fall back to a generic title
+  }
+  return 'YouTube video'
+}
+
+/**
+ * Adds a YouTube link purely for watching (no transcript required, unlike
+ * useIngestYoutubeResource). Saved as a youtube resource so it persists and
+ * shows in the node's Videos section.
+ */
+export function useAddYoutubeVideo(nodeId: string) {
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  return useMutation({
+    mutationFn: async (url: string) => {
+      if (!user) throw new Error('Not signed in')
+      if (!youtubeVideoId(url)) throw new Error('That doesn’t look like a YouTube link.')
+      const title = await fetchYoutubeTitle(url)
+      const { data, error } = await supabase
+        .from('resources')
+        .insert({ user_id: user.id, node_id: nodeId, kind: 'youtube', url, title })
+        .select('*')
+        .single()
+      if (error) throw error
+      return data as ResourceRow
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: resourcesKey(nodeId) })
+      queryClient.invalidateQueries({ queryKey: ['resource-node-ids'] })
+    },
+  })
+}
+
 interface IngestResult {
   title: string
   text: string

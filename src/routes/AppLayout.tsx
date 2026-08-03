@@ -5,13 +5,15 @@ import { TreeSidebar } from '@/components/tree/TreeSidebar'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { AIStatusLED } from '@/components/AIStatusLED'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { ResizeHandle } from '@/components/ResizeHandle'
 import { useUIStore } from '@/lib/store'
 
 export function AppLayout() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const { mobileNavOpen, setMobileNavOpen } = useUIStore()
+  const { mobileNavOpen, setMobileNavOpen, sidebarCollapsed, sidebarWidth, setSidebarWidth } =
+    useUIStore()
 
   const handleSignOut = async () => {
     await signOut()
@@ -87,6 +89,17 @@ export function AppLayout() {
         <div className="hidden md:flex">
           <TreeSidebar />
         </div>
+        {/* Drag handle between the tree and the main column (hidden when collapsed). */}
+        {!sidebarCollapsed && (
+          <div className="hidden md:flex">
+            <ResizeHandle
+              side="right"
+              ariaLabel="Resize topics sidebar"
+              getWidth={() => sidebarWidth}
+              onResize={setSidebarWidth}
+            />
+          </div>
+        )}
 
         {/* Off-canvas tree — mobile only. */}
         {mobileNavOpen && (
