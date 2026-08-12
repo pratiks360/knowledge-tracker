@@ -164,6 +164,10 @@ export function DashboardPage() {
           })}
         </div>
       </section>
+
+      <footer className="mt-10 border-t border-border pt-4 text-center text-xs text-muted">
+        Knowledge Graph v{__APP_VERSION__} · build {__BUILD_SHA__}
+      </footer>
     </div>
   )
 }
