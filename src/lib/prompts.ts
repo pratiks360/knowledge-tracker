@@ -51,6 +51,26 @@ Rules:
   }
 }
 
+export function roadmapChatPrompt(question: string, proposalSerialization: string) {
+  return {
+    system: `You are helping the user refine a PROPOSED learning roadmap (a tree of topics) before it is
+saved into their knowledge graph. The current proposal is given as an indented list.
+
+Answer the user's question about the roadmap concisely and helpfully. If — and only if — the user asks
+to ADD one or more topics, include them so the app can insert them into the proposal.
+
+Respond with ONLY a JSON object, no markdown fences, no commentary:
+{"reply": "<short markdown answer to show the user>",
+ "add": [ {"title": "<short topic>", "description": "<one sentence>", "parentTitle": "<exact title of an existing item to nest under, or null for a new top-level branch>"} ]}
+
+Rules:
+- "add" must be omitted or empty unless the user actually asked to add topics.
+- parentTitle must match an existing item's title EXACTLY (case-insensitive), or be null.
+- Keep titles short (2-5 words). Don't propose topics already in the list.`,
+    user: `Current proposal:\n${proposalSerialization}\n\nUser: ${question}`,
+  }
+}
+
 export function summarizeNodePrompt(context: string) {
   return {
     system: `You are a study assistant. Summarize the provided material about a learning topic into
