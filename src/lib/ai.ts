@@ -6,6 +6,7 @@ import {
   quizPrompt,
   recapPrompt,
   reduceSummariesPrompt,
+  roadmapChatPrompt,
   roadmapFromChatPrompt,
   roadmapPrompt,
   summarizeResourcePrompt,
@@ -289,6 +290,34 @@ export async function chatJSON<T = unknown>(opts: ChatOptions): Promise<T> {
     }
     throw new AIError(`Could not parse AI JSON response: ${cleaned.slice(0, 200)}`, 'parse_failed')
   }
+}
+
+export interface RoadmapChatAdd {
+  title: string
+  description?: string
+  parentTitle?: string | null
+}
+
+export interface RoadmapChatResult {
+  reply: string
+  add: RoadmapChatAdd[]
+}
+
+/** Q&A about a proposed roadmap; may return topics to add to the proposal. */
+export async function roadmapChat(
+  cfg: AIConfig,
+  question: string,
+  proposalSerialization: string
+): Promise<RoadmapChatResult> {
+  const { system, user } = roadmapChatPrompt(question, proposalSerialization)
+  const r = await chatJSON<{ reply?: string; add?: RoadmapChatAdd[] }>({
+    ...cfg,
+    system,
+    user,
+    temperature: 0.4,
+    maxTokens: 1200,
+  })
+  return { reply: r.reply ?? '', add: r.add ?? [] }
 }
 
 export interface SiblingSuggestion {
