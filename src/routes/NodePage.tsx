@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   useCreateNode,
@@ -20,6 +20,11 @@ import { NodeDetails } from '@/components/NodeDetails'
 import { ResourcesList } from '@/components/resources/ResourcesList'
 import { NodeVideos } from '@/components/resources/NodeVideos'
 import { RelatedPaths } from '@/components/RelatedPaths'
+
+// React Flow is heavy — only load the roadmap editor when it's opened.
+const RoadmapEditor = lazy(() =>
+  import('@/components/roadmap/RoadmapEditor').then((m) => ({ default: m.RoadmapEditor }))
+)
 import { useResources } from '@/lib/queries/resources'
 import { ChatPanel } from '@/components/ChatPanel'
 import { TagEditor } from '@/components/TagEditor'
@@ -42,6 +47,7 @@ export function NodePage() {
   const createNode = useCreateNode()
   const touchVisited = useTouchLastVisited()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [editRoadmap, setEditRoadmap] = useState(false)
   const [tab, setTab] = useState<TabKey>('details')
   const { data: resources } = useResources(id)
 
@@ -219,12 +225,22 @@ export function NodePage() {
             <section className="mb-8">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-medium uppercase tracking-wide text-muted">Subtopics</h2>
-                <button
-                  onClick={handleAddChild}
-                  className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover hover:text-text"
-                >
-                  + Add subtopic
-                </button>
+                <div className="flex gap-2">
+                  {children.length > 0 && (
+                    <button
+                      onClick={() => setEditRoadmap(true)}
+                      className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover hover:text-text"
+                    >
+                      Edit as roadmap
+                    </button>
+                  )}
+                  <button
+                    onClick={handleAddChild}
+                    className="rounded-md border border-border px-2 py-1 text-xs text-muted hover:bg-surface-hover hover:text-text"
+                  >
+                    + Add subtopic
+                  </button>
+                </div>
               </div>
               {children.length === 0 ? (
                 <p className="text-sm text-muted">No subtopics yet.</p>
@@ -268,6 +284,17 @@ export function NodePage() {
               setPickerOpen(false)
             }}
           />
+        )}
+
+        {editRoadmap && (
+          <Suspense fallback={null}>
+            <RoadmapEditor
+              node={node}
+              allNodes={nodes!}
+              onClose={() => setEditRoadmap(false)}
+              onMerged={() => setEditRoadmap(false)}
+            />
+          </Suspense>
         )}
         </div>
       </div>

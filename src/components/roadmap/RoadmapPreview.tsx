@@ -21,6 +21,8 @@ export function RoadmapPreview({
   proposal,
   targetNodeId,
   existingTitles,
+  initialFlat,
+  existingIds,
   onClose,
   onMerged,
 }: {
@@ -28,15 +30,22 @@ export function RoadmapPreview({
   targetNodeId: string
   /** Lowercased titles already present — pre-unchecked and flagged. */
   existingTitles?: Set<string>
+  /** Editing mode: seed the canvas from an existing subtree instead of a fresh proposal. */
+  initialFlat?: FlatProposalNode[]
+  /** Editing mode: proposal key -> real DB node id, for nodes that already exist. */
+  existingIds?: Map<string, string>
   onClose: () => void
   onMerged: () => void
 }) {
   // Held in state (not derived) so the proposal can be edited before it's merged.
-  const [flat, setFlat] = useState<FlatProposalNode[]>(() => flattenProposal(proposal))
+  const [flat, setFlat] = useState<FlatProposalNode[]>(
+    () => initialFlat ?? flattenProposal(proposal)
+  )
   const isExisting = (title: string) => !!existingTitles?.has(title.trim().toLowerCase())
   // Default to everything except items that already exist, so a plain "Merge" never duplicates.
+  // In editing mode the seeded nodes are existing (by id), so only newly-added ones select.
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(flat.filter((f) => !isExisting(f.title)).map((f) => f.key))
+    () => new Set(flat.filter((f) => !existingIds?.has(f.key) && !isExisting(f.title)).map((f) => f.key))
   )
   const mergeRoadmap = useMergeRoadmap(targetNodeId)
   const aiConfig = useAIConfig()
@@ -206,7 +215,10 @@ export function RoadmapPreview({
   const selectedCount = selected.size
 
   const handleMerge = () => {
-    mergeRoadmap.mutate({ flat, selectedKeys: selected }, { onSuccess: () => onMerged() })
+    mergeRoadmap.mutate(
+      { flat, selectedKeys: selected, existingIds },
+      { onSuccess: () => onMerged() }
+    )
   }
 
   return (
