@@ -36,6 +36,20 @@ function addTopicTitle(text: string): string | null {
   return match ? match[1].trim().replace(/^["']|["']$/g, '').slice(0, 120) : null
 }
 
+// A short, question-free phrase typed alone reads as a topic name ("SSO",
+// "Kafka RBAC") rather than a question — offer to plan it. Conservative: the
+// coach is still one click away, so a miss costs nothing.
+const QUESTION_LEAD =
+  /^(how|what|why|should|shall|can|could|when|where|which|who|is|are|am|do|does|did|will|would|help|tell|give|explain|list|show|compare|teach|plan)\b/i
+
+function looksLikeBareTopic(text: string): boolean {
+  const t = text.trim()
+  if (!t || t.includes('\n') || t.endsWith('?')) return false
+  if (addTopicTitle(t)) return false // explicit "add topic:" handled elsewhere
+  if (QUESTION_LEAD.test(t)) return false
+  return t.split(/\s+/).length <= 5 && t.length <= 48
+}
+
 /** Strips a leading markdown marker so an outline's first line can seed a topic title. */
 function cleanTitle(line: string): string {
   return line
@@ -298,6 +312,32 @@ export function DashboardChat({
               className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:text-text disabled:opacity-50"
             >
               Send as message
+            </button>
+          </div>
+        )}
+        {!isOutline && looksLikeBareTopic(draft) && (
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-text">
+            <span className="flex-1">
+              Looks like a topic. Plan it — see where it fits and what to learn alongside?
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                onAddTopic(draft.trim())
+                setDraft('')
+              }}
+              disabled={!configured}
+              className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-bg disabled:opacity-50"
+            >
+              Plan this topic
+            </button>
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!configured}
+              className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:text-text disabled:opacity-50"
+            >
+              Ask coach
             </button>
           </div>
         )}
