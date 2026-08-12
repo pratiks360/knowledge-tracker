@@ -16,6 +16,41 @@ Rules:
   }
 }
 
+export function topicAnalysisPrompt(rawInput: string, treeSerialization: string) {
+  return {
+    system: `You organize a personal knowledge graph of learning topics. The user named one or more
+topics they want to learn. For EACH topic, work out where it belongs and what neighbours are worth
+learning alongside it.
+
+You are given the existing topics as "id: title" lines, indented by depth. Use them to (a) reuse an
+existing parent instead of inventing one, and (b) avoid suggesting siblings the user already has.
+
+Respond with ONLY a JSON object, no markdown fences, no commentary:
+{"topics": [
+  {
+    "title": "<the topic, cleaned>",
+    "domain": "<the broader area, e.g. 'IAM / Security'>",
+    "parent_id": "<exact id from the list to file it under, or null>",
+    "parent_new": "<name of a NEW parent group to create if parent_id is null and it should be grouped, else null>",
+    "coverage": "isolated" | "part_of_larger",
+    "siblings": [ {"title": "<related topic to learn too>", "reason": "<short why>"} ],
+    "prerequisites": ["<title of something to learn first>"],
+    "related_existing_ids": ["<id of an existing node that is the SAME or a strongly related concept, for cross-linking>"]
+  }
+]}
+
+Rules:
+- Split a multi-topic request (e.g. "SSO and public/private key mechanisms") into separate entries.
+- parent_id must be an exact id from the list or null. Never invent ids.
+- coverage="part_of_larger" only when the topic clearly sits inside a bigger structure worth mapping;
+  otherwise "isolated" with an empty siblings array.
+- The same concept can belong under different parents (Security under Java vs under a Kafka cert) —
+  if you see the concept already exists elsewhere, put its id in related_existing_ids.
+- Keep sibling titles short (2-5 words); propose 3-6, skip any already present in the tree.`,
+    user: `Requested: "${rawInput}"\n\nExisting topics:\n${treeSerialization || '(none yet)'}`,
+  }
+}
+
 export function summarizeNodePrompt(context: string) {
   return {
     system: `You are a study assistant. Summarize the provided material about a learning topic into

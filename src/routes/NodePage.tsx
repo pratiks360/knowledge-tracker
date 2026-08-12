@@ -19,6 +19,7 @@ import { NodeAIActions } from '@/components/NodeAIActions'
 import { NodeDetails } from '@/components/NodeDetails'
 import { ResourcesList } from '@/components/resources/ResourcesList'
 import { NodeVideos } from '@/components/resources/NodeVideos'
+import { RelatedPaths } from '@/components/RelatedPaths'
 import { useResources } from '@/lib/queries/resources'
 import { ChatPanel } from '@/components/ChatPanel'
 import { TagEditor } from '@/components/TagEditor'
@@ -126,6 +127,8 @@ export function NodePage() {
         {node.description && <p className="mb-3 text-sm text-muted">{node.description}</p>}
 
         <TagEditor node={node} />
+
+        <RelatedPaths node={node} allNodes={nodes!} />
 
         {wasStale && <RecapCard node={node} />}
 
