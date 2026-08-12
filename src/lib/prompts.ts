@@ -110,6 +110,12 @@ together, and (if the sources support it) practical examples or applications. Pr
 the provided resources over generic filler. Do not invent facts that contradict the sources; you may add
 widely-known foundational context to connect ideas, but keep it accurate.
 
+Where a diagram genuinely aids understanding (an architecture, a flow, a sequence of steps, a hierarchy,
+or how components relate), include a Mermaid diagram in a \`\`\`mermaid fenced code block with valid
+Mermaid syntax (flowchart, sequenceDiagram, classDiagram, erDiagram, etc.). Keep node labels short and
+plain — avoid parentheses/quotes inside labels that break parsing. Use diagrams sparingly, only when they
+clarify more than prose. Do not force one where it doesn't help.
+
 Length: ${DETAILS_LENGTH_GUIDANCE[length]}`
 
   if (instructions) {

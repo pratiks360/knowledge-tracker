@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { Markdown } from '@/components/Markdown'
 import type { NodeRow, ResourceRow } from '@/types/db'
 import { useUpdateNode } from '@/lib/queries/nodes'
 import { useResources } from '@/lib/queries/resources'
@@ -190,7 +189,7 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
       {hasDetails ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{node.details_md!}</ReactMarkdown>
+            <Markdown>{node.details_md!}</Markdown>
           </div>
           {sources.length > 0 && (
             <div className="mt-4 border-t border-border pt-3">
