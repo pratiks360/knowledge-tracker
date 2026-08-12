@@ -42,15 +42,24 @@ export function useMergeRoadmap(targetNodeId: string) {
     mutationFn: async ({
       flat,
       selectedKeys,
+      existingIds,
     }: {
       flat: FlatProposalNode[]
       selectedKeys: Set<string>
+      /**
+       * When editing an existing roadmap, maps a proposal key to the real DB node id
+       * it already represents. Such nodes are treated as already-created (used as
+       * parents) and are never re-inserted.
+       */
+      existingIds?: Map<string, string>
     }) => {
       if (!user) throw new Error('Not signed in')
-      const selected = flat.filter((f) => selectedKeys.has(f.key))
+      // Never recreate nodes that already exist in the graph.
+      const selected = flat.filter((f) => selectedKeys.has(f.key) && !existingIds?.has(f.key))
       if (selected.length === 0) return { createdIds: new Map<string, string>() }
 
-      // Map proposal key -> created DB node id, resolving to nearest selected ancestor (or target).
+      // Map proposal key -> created DB node id, resolving to nearest selected ancestor,
+      // an existing node, or the target root.
       const createdIds = new Map<string, string>()
       const byKey = new Map(flat.map((f) => [f.key, f]))
 
@@ -58,6 +67,7 @@ export function useMergeRoadmap(targetNodeId: string) {
         let cursor = parentKey
         while (cursor) {
           if (createdIds.has(cursor)) return createdIds.get(cursor)!
+          if (existingIds?.has(cursor)) return existingIds.get(cursor)!
           cursor = byKey.get(cursor)?.parentKey ?? null
         }
         return targetNodeId
