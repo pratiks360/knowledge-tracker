@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useNodes, computeProgress } from '@/lib/queries/nodes'
 import { ProgressRing } from '@/components/ProgressRing'
-import { AutoPlacementDialog } from '@/components/AutoPlacementDialog'
+import { TopicAnalysisDialog } from '@/components/TopicAnalysisDialog'
 import { RoadmapQuickAdd } from '@/components/roadmap/RoadmapQuickAdd'
 import { RoadmapFromChat } from '@/components/roadmap/RoadmapFromChat'
 import { DashboardChat } from '@/components/DashboardChat'
@@ -60,12 +60,16 @@ export function DashboardPage() {
       />
 
       {placementTitle && (
-        <AutoPlacementDialog
-          title={placementTitle}
+        <TopicAnalysisDialog
+          rawInput={placementTitle}
           onClose={() => setPlacementTitle(null)}
           onCreated={(nodeId) => {
             setPlacementTitle(null)
             navigate(`/node/${nodeId}`)
+          }}
+          onBuildRoadmap={({ title, outline }) => {
+            setPlacementTitle(null)
+            setRoadmapInput({ title, sourceOutline: outline })
           }}
         />
       )}

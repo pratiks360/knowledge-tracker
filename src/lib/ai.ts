@@ -9,6 +9,7 @@ import {
   roadmapFromChatPrompt,
   roadmapPrompt,
   summarizeResourcePrompt,
+  topicAnalysisPrompt,
 } from '@/lib/prompts'
 import { supabase } from '@/lib/supabase'
 import type { AIProvider, QuizQuestion } from '@/types/db'
@@ -288,6 +289,44 @@ export async function chatJSON<T = unknown>(opts: ChatOptions): Promise<T> {
     }
     throw new AIError(`Could not parse AI JSON response: ${cleaned.slice(0, 200)}`, 'parse_failed')
   }
+}
+
+export interface SiblingSuggestion {
+  title: string
+  reason?: string
+}
+
+export interface TopicAnalysis {
+  title: string
+  domain: string
+  parent_id: string | null
+  parent_new: string | null
+  coverage: 'isolated' | 'part_of_larger'
+  siblings: SiblingSuggestion[]
+  prerequisites: string[]
+  related_existing_ids: string[]
+}
+
+/** Analyzes one or more requested topics against the existing tree (siblings, domain, placement). */
+export async function analyzeTopics(
+  cfg: AIConfig,
+  rawInput: string,
+  treeSerialization: string
+): Promise<TopicAnalysis[]> {
+  const { system, user } = topicAnalysisPrompt(rawInput, treeSerialization)
+  const result = await chatJSON<{ topics?: TopicAnalysis[] }>({
+    ...cfg,
+    system,
+    user,
+    temperature: 0.3,
+    maxTokens: 1200,
+  })
+  return (result.topics ?? []).map((t) => ({
+    ...t,
+    siblings: t.siblings ?? [],
+    prerequisites: t.prerequisites ?? [],
+    related_existing_ids: t.related_existing_ids ?? [],
+  }))
 }
 
 export interface AutoPlacementResult {
