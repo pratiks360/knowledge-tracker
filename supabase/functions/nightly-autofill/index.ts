@@ -5,8 +5,11 @@
 // configured provider (OpenRouter -> NVIDIA -> Cloudflare):
 // when one hits its free limit (429/402/403) we move to the next.
 //
-// Auth: not a user request — verifies a shared CRON_SECRET header.
-// Deploy with --no-verify-jwt.
+// Two ways in:
+// - Cron: shared CRON_SECRET header, runs every enabled user due this UTC hour.
+// - Manual "Run now": a signed-in user's own Bearer JWT, runs just for them,
+//   ignoring autofill_enabled/autofill_hour (deploy with --no-verify-jwt so
+//   this function does its own auth instead of Supabase's gateway check).
 // ============================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -22,31 +25,63 @@ interface ProviderCfg {
 const PAUSE_MS = 1200 // gentle pacing between calls to respect free rate limits
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type, x-cron-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 Deno.serve(async (req: Request) => {
-  const secret = Deno.env.get('CRON_SECRET')
-  if (!secret || req.headers.get('x-cron-secret') !== secret) {
-    return json({ error: 'Unauthorized' }, 401)
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   )
 
-  const hour = new Date().getUTCHours()
+  const cronSecret = Deno.env.get('CRON_SECRET')
+  const isCron = !!cronSecret && req.headers.get('x-cron-secret') === cronSecret
 
-  const { data: settingsRows, error: sErr } = await supabase
+  if (isCron) {
+    const hour = new Date().getUTCHours()
+    const { data: settingsRows, error: sErr } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('autofill_enabled', true)
+      .eq('autofill_hour', hour)
+    if (sErr) return json({ error: sErr.message }, 500)
+
+    const summary: Record<string, unknown>[] = []
+    for (const s of settingsRows ?? []) {
+      summary.push(await runForUser(supabase, s))
+    }
+    return json({ ran: summary.length, users: summary })
+  }
+
+  // Manual "Run now": authenticate the caller as a real user via their own JWT,
+  // then run just for them regardless of autofill_enabled/autofill_hour.
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
+  const userClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: authHeader } } }
+  )
+  const {
+    data: { user },
+    error: authError,
+  } = await userClient.auth.getUser()
+  if (authError || !user) return json({ error: 'Unauthorized' }, 401)
+
+  const { data: settings, error: sErr } = await supabase
     .from('user_settings')
     .select('*')
-    .eq('autofill_enabled', true)
-    .eq('autofill_hour', hour)
-  if (sErr) return json({ error: sErr.message }, 500)
+    .eq('user_id', user.id)
+    .single()
+  if (sErr || !settings) return json({ error: 'No settings found for this user' }, 404)
 
-  const summary: Record<string, unknown>[] = []
-  for (const s of settingsRows ?? []) {
-    summary.push(await runForUser(supabase, s))
-  }
-  return json({ ran: summary.length, users: summary })
+  const result = await runForUser(supabase, settings)
+  return json(result)
 })
 
 function buildProviders(s: Record<string, unknown>): ProviderCfg[] {
@@ -231,6 +266,6 @@ async function callProvider(
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 }

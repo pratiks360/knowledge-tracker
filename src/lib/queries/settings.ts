@@ -71,6 +71,27 @@ export function useUserSettings() {
   })
 }
 
+export interface RunAutofillResult {
+  filled: number
+  status: string
+}
+
+/** Manually triggers a nightly-autofill run for just the signed-in user, right now. */
+export function useRunAutofillNow() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (): Promise<RunAutofillResult> => {
+      const { data, error } = await supabase.functions.invoke('nightly-autofill', { body: {} })
+      if (error) throw error
+      return { filled: Number(data?.filled ?? 0), status: String(data?.status ?? 'ok') }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: SETTINGS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['nodes'] })
+    },
+  })
+}
+
 export function useSaveUserSettings() {
   const queryClient = useQueryClient()
   const { user } = useAuth()

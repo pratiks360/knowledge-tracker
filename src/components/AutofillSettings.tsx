@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useUserSettings, useSaveUserSettings } from '@/lib/queries/settings'
+import { useUserSettings, useSaveUserSettings, useRunAutofillNow } from '@/lib/queries/settings'
 import { useNodes } from '@/lib/queries/nodes'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -13,6 +13,8 @@ export function AutofillSettings() {
   const { data: settings } = useUserSettings()
   const save = useSaveUserSettings()
   const { data: nodes } = useNodes()
+  const runNow = useRunAutofillNow()
+  const [runError, setRunError] = useState<string | null>(null)
 
   const emptyCount = useMemo(
     () => (nodes ?? []).filter((n) => !n.details_md?.trim()).length,
@@ -32,15 +34,37 @@ export function AutofillSettings() {
         <h2 className="text-sm font-medium uppercase tracking-wide text-muted">
           Nightly auto-fill
         </h2>
-        <label className="flex items-center gap-2 text-xs text-muted">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => save.mutate({ autofill_enabled: e.target.checked })}
-          />
-          Enabled
-        </label>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setRunError(null)
+              runNow.mutate(undefined, {
+                onError: (e) => setRunError(e instanceof Error ? e.message : 'Run failed.'),
+              })
+            }}
+            disabled={runNow.isPending}
+            className="rounded-md border border-border px-2.5 py-1 text-xs text-text hover:bg-surface-hover disabled:opacity-50"
+          >
+            {runNow.isPending ? 'Running…' : 'Run now'}
+          </button>
+          <label className="flex items-center gap-2 text-xs text-muted">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => save.mutate({ autofill_enabled: e.target.checked })}
+            />
+            Enabled
+          </label>
+        </div>
       </div>
+
+      {runError && <p className="mb-3 text-sm text-error">{runError}</p>}
+      {runNow.isSuccess && !runNow.isPending && (
+        <p className="mb-3 text-sm text-success">
+          Filled {runNow.data.filled} topic{runNow.data.filled === 1 ? '' : 's'}
+          {runNow.data.status !== 'ok' ? ` (${runNow.data.status})` : ''}.
+        </p>
+      )}
 
       <p className="mb-3 text-sm text-muted">
         Once a night, spend leftover <span className="text-text">free</span> AI credits generating
