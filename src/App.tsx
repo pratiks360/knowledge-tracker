@@ -6,6 +6,8 @@ import { LoginPage } from '@/routes/auth/LoginPage'
 import { AuthCallback } from '@/routes/auth/AuthCallback'
 import { DashboardPage } from '@/routes/DashboardPage'
 import { NodePage } from '@/routes/NodePage'
+import { GraphPage } from '@/routes/GraphPage'
+import { StatsPage } from '@/routes/StatsPage'
 import { PresentPage } from '@/routes/PresentPage'
 import { SettingsPage } from '@/routes/SettingsPage'
 import { NotFoundPage } from '@/routes/NotFoundPage'
@@ -37,6 +39,8 @@ export function App() {
           >
             <Route index element={<DashboardPage />} />
             <Route path="node/:id" element={<NodePage />} />
+            <Route path="graph" element={<GraphPage />} />
+            <Route path="stats" element={<StatsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 

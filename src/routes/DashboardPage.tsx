@@ -6,6 +6,7 @@ import { TopicAnalysisDialog } from '@/components/TopicAnalysisDialog'
 import { RoadmapQuickAdd } from '@/components/roadmap/RoadmapQuickAdd'
 import { RoadmapFromChat } from '@/components/roadmap/RoadmapFromChat'
 import { DashboardChat } from '@/components/DashboardChat'
+import { JDPrepDialog } from '@/components/JDPrepDialog'
 import type { ChatMessageRow } from '@/types/db'
 
 const REVIEW_DUE_DAYS = 14
@@ -27,6 +28,7 @@ export function DashboardPage() {
   const [chatRoadmap, setChatRoadmap] = useState<{ webSearch: boolean } | null>(null)
   // Single topic via "add topic: X" in the coach.
   const [placementTitle, setPlacementTitle] = useState<string | null>(null)
+  const [jdPrepOpen, setJdPrepOpen] = useState(false)
 
   const roots = useMemo(() => (nodes ?? []).filter((n) => !n.parent_id), [nodes])
 
@@ -94,6 +96,25 @@ export function DashboardPage() {
           onClose={() => setRoadmapInput(null)}
           onDone={(nodeId) => {
             setRoadmapInput(null)
+            navigate(`/node/${nodeId}`)
+          }}
+        />
+      )}
+
+      <div className="mb-6 flex justify-end">
+        <button
+          onClick={() => setJdPrepOpen(true)}
+          className="rounded-md border border-border px-3 py-1.5 text-xs text-text hover:bg-surface-hover"
+        >
+          Prep for a JD
+        </button>
+      </div>
+
+      {jdPrepOpen && (
+        <JDPrepDialog
+          onClose={() => setJdPrepOpen(false)}
+          onDone={(nodeId) => {
+            setJdPrepOpen(false)
             navigate(`/node/${nodeId}`)
           }}
         />

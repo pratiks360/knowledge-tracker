@@ -84,6 +84,8 @@ async function runForUser(supabase: any, s: Record<string, unknown>) {
   const providers = buildProviders(s)
   const cap = Number(s.autofill_max_per_run ?? 20)
 
+  const filledList: { id: string; title: string }[] = []
+
   const finish = (count: number, status: string) =>
     supabase
       .from('user_settings')
@@ -91,6 +93,7 @@ async function runForUser(supabase: any, s: Record<string, unknown>) {
         autofill_last_run: new Date().toISOString(),
         autofill_last_count: count,
         autofill_last_status: status,
+        autofill_last_filled: filledList,
       })
       .eq('user_id', userId)
 
@@ -151,6 +154,7 @@ async function runForUser(supabase: any, s: Record<string, unknown>) {
           .update({ details_md: res.content, details_generated_at: new Date().toISOString() })
           .eq('id', node.id)
         filled++
+        filledList.push({ id: String(node.id), title: String(node.title) })
         done = true
       } else if (res.exhausted) {
         providerIdx++ // this provider is out of free quota — rotate to the next

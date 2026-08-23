@@ -338,6 +338,31 @@ Rules:
   }
 }
 
+export function jdPrepPrompt(jdText: string, existingTree: string) {
+  return {
+    system: `You are a career coach helping a learner prep for a specific job. They pasted a job
+description (JD). Work out what they need to prepare, then map it against topics they ALREADY have
+in their personal knowledge graph (given as "id: title" lines, indented by depth).
+
+Respond with ONLY a JSON object, no markdown fences, no commentary:
+{"roleTitle": "<short role name, e.g. 'Senior Backend Engineer @ Acme'>",
+ "newTopics": [ {"title": "<short topic, 2-6 words>", "description": "<one sentence — what to prepare and why the JD needs it>"} ],
+ "matchedExistingIds": ["<id of an existing topic that already covers something this JD needs>"]}
+
+Rules:
+- Extract concrete, prep-worthy topics from the JD (skills, tools, concepts, domains) — not vague
+  phrases like "team player" or "good communication" unless the JD frames them as a hard requirement
+  to prepare material for.
+- For each required area: if an existing topic already covers it (same or clearly overlapping concept),
+  put its exact id in "matchedExistingIds" and do NOT also add it to "newTopics". If nothing existing
+  covers it, add it to "newTopics" instead.
+- matchedExistingIds must be exact ids from the list. Never invent ids.
+- Keep newTopics to what's genuinely missing — 4-12 items unless the JD clearly needs more or fewer.
+- Don't duplicate an existing topic's title in newTopics even loosely reworded.`,
+    user: `Job description:\n${jdText}\n\nExisting topics:\n${existingTree || '(none yet)'}`,
+  }
+}
+
 export function reduceSummariesPrompt(title: string, partialSummaries: string[]) {
   return {
     system: `You are a study assistant. Combine the following partial summaries of a resource titled

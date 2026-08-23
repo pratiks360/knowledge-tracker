@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import type { UserSettingsRow } from '@/types/db'
-import { PROVIDER_BASE, cloudflareBase, type AIConfig } from '@/lib/ai'
+import { PROVIDER_BASE, cloudflareBase, type AIConfig, type EmbeddingConfig } from '@/lib/ai'
 
 const SETTINGS_KEY = ['user_settings'] as const
 
@@ -30,6 +30,28 @@ export function resolveAIConfig(settings: UserSettingsRow | null | undefined): A
 export function useAIConfig(): AIConfig | null {
   const { data: settings } = useUserSettings()
   return resolveAIConfig(settings)
+}
+
+/** Resolves the embedding provider's key + model, reusing that provider's own chat credentials. */
+export function resolveEmbeddingConfig(
+  settings: UserSettingsRow | null | undefined
+): EmbeddingConfig | null {
+  if (!settings?.embedding_provider || !settings.embedding_model) return null
+  const provider = settings.embedding_provider
+  if (provider === 'cloudflare') {
+    const apiKey = settings.cloudflare_api_key
+    const accountId = settings.cloudflare_account_id
+    if (!apiKey || !accountId) return null
+    return { provider, apiKey, model: settings.embedding_model, baseUrl: cloudflareBase(accountId) }
+  }
+  const apiKey = settings.nvidia_api_key
+  if (!apiKey) return null
+  return { provider, apiKey, model: settings.embedding_model, baseUrl: PROVIDER_BASE.nvidia }
+}
+
+export function useEmbeddingConfig(): EmbeddingConfig | null {
+  const { data: settings } = useUserSettings()
+  return resolveEmbeddingConfig(settings)
 }
 
 export function useUserSettings() {
@@ -68,6 +90,9 @@ export function useSaveUserSettings() {
           | 'autofill_enabled'
           | 'autofill_hour'
           | 'autofill_max_per_run'
+          | 'embedding_provider'
+          | 'embedding_model'
+          | 'embeddings_built_at'
         >
       >
     ) => {

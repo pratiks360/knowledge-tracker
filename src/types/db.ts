@@ -1,5 +1,5 @@
 export type NodeStatus = 'not_started' | 'learning' | 'done'
-export type NodeKind = 'topic' | 'project' | 'profile_root'
+export type NodeKind = 'topic' | 'project' | 'profile_root' | 'jd_prep'
 export type LinkType = 'related' | 'uses' | 'prerequisite'
 export type ResourceKind = 'web' | 'youtube' | 'manual'
 export type ChatRole = 'user' | 'assistant'
@@ -125,7 +125,35 @@ export type UserSettingsRow = {
   autofill_last_run: string | null
   autofill_last_count: number | null
   autofill_last_status: string | null
+  autofill_last_filled: { id: string; title: string }[] | null
+  // Semantic search: which configured provider (reusing its existing key) generates
+  // embeddings, and the embedding model id. Must produce 768-dim vectors — e.g.
+  // Cloudflare's "@cf/baai/bge-base-en-v1.5".
+  embedding_provider: 'nvidia' | 'cloudflare' | null
+  embedding_model: string | null
+  embeddings_built_at: string | null
   updated_at?: string
+}
+
+export type ContentEmbeddingKind = 'node' | 'resource'
+
+export type ContentEmbeddingRow = {
+  id: string
+  user_id: string
+  node_id: string
+  resource_id: string | null
+  kind: ContentEmbeddingKind
+  content: string
+  embedding: number[]
+  updated_at: string
+}
+
+export type MatchEmbeddingResult = {
+  node_id: string
+  resource_id: string | null
+  kind: ContentEmbeddingKind
+  content: string
+  similarity: number
 }
 
 export type SearchResultRow = {
@@ -188,12 +216,21 @@ export type Database = {
         Insert: Partial<UserSettingsRow>
         Update: Partial<UserSettingsRow>
       } & NoRelationships
+      content_embeddings: {
+        Row: ContentEmbeddingRow
+        Insert: Partial<ContentEmbeddingRow>
+        Update: Partial<ContentEmbeddingRow>
+      } & NoRelationships
     }
     Views: Record<string, never>
     Functions: {
       search_all: {
         Args: { search_query: string }
         Returns: SearchResultRow[]
+      }
+      match_embeddings: {
+        Args: { query_embedding: number[]; match_count?: number }
+        Returns: MatchEmbeddingResult[]
       }
     }
     Enums: Record<string, never>

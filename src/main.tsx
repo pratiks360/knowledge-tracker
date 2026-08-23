@@ -8,8 +8,10 @@ import { initTheme } from '@/lib/theme'
 import '@fontsource-variable/inter'
 import '@fontsource-variable/space-grotesk'
 import '@/styles/globals.css'
+import { registerSW } from 'virtual:pwa-register'
 
 initTheme()
+registerSW({ immediate: true })
 
 const queryClient = new QueryClient({
   defaultOptions: {
