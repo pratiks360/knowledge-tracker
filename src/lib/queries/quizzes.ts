@@ -24,6 +24,20 @@ export function useLatestQuiz(nodeId: string | undefined) {
   })
 }
 
+/** All of the user's quizzes, unscoped — for the stats page. */
+export function useAllQuizzes() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['quizzes', 'all'],
+    enabled: !!user,
+    queryFn: async (): Promise<QuizRow[]> => {
+      const { data, error } = await supabase.from('quizzes').select('*')
+      if (error) throw error
+      return data as QuizRow[]
+    },
+  })
+}
+
 export function useCreateQuiz(nodeId: string) {
   const queryClient = useQueryClient()
   const { user } = useAuth()

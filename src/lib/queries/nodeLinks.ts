@@ -21,6 +21,20 @@ export function useNodeLinks(nodeId: string | undefined) {
   })
 }
 
+/** All of the user's node_links, unscoped — for the global graph view. */
+export function useAllNodeLinks() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['node_links', 'all'],
+    enabled: !!user,
+    queryFn: async (): Promise<NodeLinkRow[]> => {
+      const { data, error } = await supabase.from('node_links').select('*')
+      if (error) throw error
+      return data as NodeLinkRow[]
+    },
+  })
+}
+
 export function useAddNodeLink(nodeId: string) {
   const queryClient = useQueryClient()
   const { user } = useAuth()

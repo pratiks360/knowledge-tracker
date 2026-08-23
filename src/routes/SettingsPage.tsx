@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useSaveUserSettings, useUserSettings } from '@/lib/queries/settings'
 import { listModels, isFreeModel, pingModel, PROVIDER_BASE, cloudflareBase, AIError } from '@/lib/ai'
 import { AutofillSettings } from '@/components/AutofillSettings'
+import { ExportBackup } from '@/components/ExportBackup'
+import { SemanticSearchSettings } from '@/components/SemanticSearchSettings'
 import type { AIProvider, UserSettingsRow } from '@/types/db'
 
 interface ProviderMeta {
@@ -339,6 +341,14 @@ export function SettingsPage() {
 
       <div className="mt-8 border-t border-border pt-6">
         <AutofillSettings />
+      </div>
+
+      <div className="mt-8 border-t border-border pt-6">
+        <SemanticSearchSettings />
+      </div>
+
+      <div className="mt-8 border-t border-border pt-6">
+        <ExportBackup />
       </div>
     </div>
   )

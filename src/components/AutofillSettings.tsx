@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useUserSettings, useSaveUserSettings } from '@/lib/queries/settings'
 import { useNodes } from '@/lib/queries/nodes'
 
@@ -21,6 +22,9 @@ export function AutofillSettings() {
   const enabled = settings?.autofill_enabled ?? false
   const hour = settings?.autofill_hour ?? 2
   const max = settings?.autofill_max_per_run ?? 20
+
+  const existingIds = useMemo(() => new Set((nodes ?? []).map((n) => n.id)), [nodes])
+  const lastFilled = settings?.autofill_last_filled ?? []
 
   return (
     <section className="mb-8">
@@ -93,6 +97,32 @@ export function AutofillSettings() {
           </>
         )}
       </div>
+
+      {lastFilled.length > 0 && (
+        <div className="mt-2 rounded-md border border-border bg-surface px-3 py-2">
+          <p className="mb-1.5 text-xs uppercase tracking-wide text-muted">
+            Filled last run
+          </p>
+          <ul className="flex flex-col gap-1">
+            {lastFilled.map((f) =>
+              existingIds.has(f.id) ? (
+                <li key={f.id}>
+                  <Link
+                    to={`/node/${f.id}`}
+                    className="text-xs text-accent-2 hover:underline"
+                  >
+                    {f.title}
+                  </Link>
+                </li>
+              ) : (
+                <li key={f.id} className="text-xs text-muted line-through">
+                  {f.title}
+                </li>
+              )
+            )}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }

@@ -20,6 +20,8 @@ import { NodeDetails } from '@/components/NodeDetails'
 import { ResourcesList } from '@/components/resources/ResourcesList'
 import { NodeVideos } from '@/components/resources/NodeVideos'
 import { RelatedPaths } from '@/components/RelatedPaths'
+import { ExportSubtreeButton } from '@/components/ExportSubtreeButton'
+import { useDismantleJDPrep } from '@/lib/queries/jdPrep'
 
 // React Flow is heavy — only load the roadmap editor when it's opened.
 const RoadmapEditor = lazy(() =>
@@ -45,6 +47,7 @@ export function NodePage() {
   const updateNode = useUpdateNode()
   const deleteNode = useDeleteNode()
   const createNode = useCreateNode()
+  const dismantleJDPrep = useDismantleJDPrep()
   const touchVisited = useTouchLastVisited()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [editRoadmap, setEditRoadmap] = useState(false)
@@ -97,6 +100,22 @@ export function NodePage() {
     })
   }
 
+  const handleDismantleJDPrep = () => {
+    if (
+      !window.confirm(
+        `Dismantle "${node.title}"? Its subtopics move up to where this prep sits, and the links to matched topics are removed.`
+      )
+    )
+      return
+    dismantleJDPrep.mutate(
+      { node, allNodes: nodes! },
+      {
+        onSuccess: () =>
+          navigate(ancestors.length ? `/node/${ancestors[ancestors.length - 1].id}` : '/'),
+      }
+    )
+  }
+
   return (
     <div className="flex h-full min-w-0">
       <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
@@ -104,6 +123,16 @@ export function NodePage() {
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <Breadcrumbs ancestors={ancestors} current={node} />
           <div className="flex shrink-0 gap-2">
+            <ExportSubtreeButton node={node} allNodes={nodes!} />
+            {node.node_kind === 'jd_prep' && (
+              <button
+                onClick={handleDismantleJDPrep}
+                disabled={dismantleJDPrep.isPending}
+                className="rounded-md border border-border px-2.5 py-1 text-xs text-text hover:bg-surface-hover disabled:opacity-50"
+              >
+                {dismantleJDPrep.isPending ? 'Dismantling…' : 'Dismantle JD prep'}
+              </button>
+            )}
             <button
               onClick={() => setPickerOpen(true)}
               className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-hover hover:text-text"

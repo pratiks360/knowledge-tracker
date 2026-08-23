@@ -25,7 +25,7 @@ const ALLOWED_BASES = new Set(['https://integrate.api.nvidia.com/v1'])
 const ALLOWED_BASE_PATTERNS = [
   /^https:\/\/api\.cloudflare\.com\/client\/v4\/accounts\/[a-f0-9]{32}\/ai\/v1$/,
 ]
-const ALLOWED_PATHS = new Set(['/models', '/chat/completions'])
+const ALLOWED_PATHS = new Set(['/models', '/chat/completions', '/embeddings'])
 
 function isAllowedBase(base: string): boolean {
   return ALLOWED_BASES.has(base) || ALLOWED_BASE_PATTERNS.some((re) => re.test(base))

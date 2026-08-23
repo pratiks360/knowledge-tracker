@@ -59,6 +59,12 @@ export function AppLayout() {
           <nav className="flex shrink-0 items-center gap-2 text-sm text-muted sm:gap-4">
             <ThemeToggle />
             <AIStatusLED />
+            <Link to="/graph" className="hidden transition hover:text-text sm:inline">
+              Graph
+            </Link>
+            <Link to="/stats" className="hidden transition hover:text-text sm:inline">
+              Stats
+            </Link>
             <Link to="/present" className="hidden transition hover:text-text sm:inline">
               Present
             </Link>

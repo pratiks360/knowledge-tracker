@@ -3,6 +3,7 @@ import {
   detailsNodePrompt,
   type DetailsLength,
   formatNotesPrompt,
+  jdPrepPrompt,
   quizPrompt,
   recapPrompt,
   reduceSummariesPrompt,
@@ -59,7 +60,7 @@ async function providerFetch(
   provider: AIProvider,
   baseUrl: string,
   apiKey: string,
-  path: '/models' | '/chat/completions',
+  path: '/models' | '/chat/completions' | '/embeddings',
   payload?: unknown
 ): Promise<Response> {
   if (PROXIED_PROVIDERS.has(provider)) {
@@ -505,6 +506,70 @@ export async function generateRoadmapFromChat(
   // and return the bare array, or nest the roadmap under a differently-named key.
   const nodes = normalizeProposal(obj.nodes ?? raw)
   return { title, nodes }
+}
+
+/** Config for the provider generating embeddings — reuses that provider's stored key. */
+export type EmbeddingConfig = Omit<AIConfig, 'provider'> & { provider: 'nvidia' | 'cloudflare' }
+
+/** Embeds one string via an OpenAI-compatible /embeddings endpoint. Must return 768-dim vectors. */
+export async function embedText(cfg: EmbeddingConfig, text: string): Promise<number[]> {
+  if (!cfg.apiKey || !cfg.model) throw new AIError('No embedding model configured.', 'missing_key')
+  const res = await providerFetch(cfg.provider, cfg.baseUrl, cfg.apiKey, '/embeddings', {
+    model: cfg.model,
+    input: text.slice(0, 8000),
+  })
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new AIError(`Embedding request failed (${res.status}): ${t.slice(0, 200)}`)
+  }
+  const data = await res.json()
+  const vector = data.data?.[0]?.embedding
+  if (!Array.isArray(vector)) throw new AIError('Embedding response had no vector.')
+  return vector as number[]
+}
+
+export interface JDPrepResult {
+  roleTitle: string
+  newTopics: { title: string; description?: string }[]
+  matchedExistingIds: string[]
+}
+
+/** Parses a pasted job description into new-prep topics + matched existing topics. */
+export async function analyzeJD(
+  cfg: AIConfig,
+  jdText: string,
+  existingTree: string
+): Promise<JDPrepResult> {
+  const { system, user } = jdPrepPrompt(jdText, existingTree)
+  const raw = await chatJSON<Record<string, unknown>>({ ...cfg, system, user, maxTokens: 2500 })
+
+  const roleTitle = typeof raw.roleTitle === 'string' ? raw.roleTitle.trim() : ''
+  type NewTopic = { title: string; description?: string }
+  const newTopics: NewTopic[] = Array.isArray(raw.newTopics)
+    ? raw.newTopics
+        .map((t): NewTopic | null => {
+          if (!t || typeof t !== 'object') return null
+          const o = t as Record<string, unknown>
+          const title = typeof o.title === 'string' ? o.title.trim() : ''
+          if (!title) return null
+          return {
+            title,
+            description: typeof o.description === 'string' ? o.description : undefined,
+          }
+        })
+        .filter((t): t is NewTopic => t !== null)
+    : []
+  const validIds = new Set(
+    existingTree
+      .split('\n')
+      .map((line) => line.trim().split(':')[0])
+      .filter(Boolean)
+  )
+  const matchedExistingIds = Array.isArray(raw.matchedExistingIds)
+    ? raw.matchedExistingIds.filter((id): id is string => typeof id === 'string' && validIds.has(id))
+    : []
+
+  return { roleTitle, newTopics, matchedExistingIds }
 }
 
 const DETAILS_MAX_TOKENS: Record<DetailsLength, number> = {
