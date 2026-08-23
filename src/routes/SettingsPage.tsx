@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSaveUserSettings, useUserSettings } from '@/lib/queries/settings'
 import { listModels, isFreeModel, pingModel, PROVIDER_BASE, cloudflareBase, AIError } from '@/lib/ai'
+import { AutofillSettings } from '@/components/AutofillSettings'
 import type { AIProvider, UserSettingsRow } from '@/types/db'
 
 interface ProviderMeta {
@@ -335,6 +336,10 @@ export function SettingsPage() {
           )}
         </section>
       )}
+
+      <div className="mt-8 border-t border-border pt-6">
+        <AutofillSettings />
+      </div>
     </div>
   )
 }
