@@ -1,5 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { listModels, isFreeModel, pingModel, providerListsModels } from '@/lib/ai'
+import { listModels, isFreeModel, isNvidiaFreeChatModel, pingModel, providerListsModels } from '@/lib/ai'
+import type { AIProvider } from '@/types/db'
+
+function freeFilterFor(provider: AIProvider) {
+  if (provider === 'openrouter') return isFreeModel
+  if (provider === 'nvidia') return isNvidiaFreeChatModel
+  return null
+}
 import { useAIConfig } from '@/lib/queries/settings'
 
 // Check every 5 minutes so we barely touch the free-tier quota.
@@ -45,7 +52,8 @@ export function useProviderModels(enabled: boolean) {
     retry: false,
     queryFn: async () => {
       const models = await listModels(cfg!.apiKey, cfg!.baseUrl, cfg!.provider)
-      const filtered = cfg!.provider === 'openrouter' ? models.filter(isFreeModel) : models
+      const freeFilter = freeFilterFor(cfg!.provider)
+      const filtered = freeFilter ? models.filter(freeFilter) : models
       return filtered
         .map((m) => ({ id: m.id, name: m.name ?? m.id }))
         .sort((a, b) => a.name.localeCompare(b.name))
@@ -67,9 +75,8 @@ export function useAliveModels(enabled: boolean) {
     retry: false,
     queryFn: async () => {
       const models = await listModels(cfg!.apiKey, cfg!.baseUrl, cfg!.provider)
-      const candidates = (cfg!.provider === 'openrouter' ? models.filter(isFreeModel) : models).map(
-        (m) => m.id
-      )
+      const freeFilter = freeFilterFor(cfg!.provider)
+      const candidates = (freeFilter ? models.filter(freeFilter) : models).map((m) => m.id)
       const alive: string[] = []
       let attempts = 0
       for (const id of candidates) {

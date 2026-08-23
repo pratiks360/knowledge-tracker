@@ -112,9 +112,47 @@ export interface OpenRouterModel {
 }
 
 export function isFreeModel(model: OpenRouterModel): boolean {
-  // NVIDIA build.nvidia.com models have no pricing block — all free.
+  // NVIDIA is handled separately by isNvidiaFreeChatModel — its /v1/models response has
+  // no pricing block at all, free or not, so this pricing check can't tell them apart.
   if (!model.pricing) return true
   return Number(model.pricing.prompt ?? 1) === 0 && Number(model.pricing.completion ?? 1) === 0
+}
+
+/**
+ * NVIDIA's `/v1/models` lists every NIM in the catalog — hosted AND download-only,
+ * chat AND embedding/OCR/TTS/etc — with no field distinguishing them. build.nvidia.com's
+ * "Free Endpoint" filter is the source of truth but has no public API, so this is a
+ * manually curated allowlist of ids confirmed there as both free-hosted and chat-capable.
+ * A `models.filter()` against this only narrows the live catalog — a stale entry here
+ * just fails to match and is silently dropped, it can't reintroduce a broken model.
+ */
+export const NVIDIA_FREE_CHAT_MODELS = new Set([
+  'deepseek-ai/deepseek-v4-flash-0731',
+  'deepseek-ai/deepseek-r1',
+  'nvidia/nemotron-3.5-lightning-30b-a3b',
+  'nvidia/nemotron-3-ultra-550b-a55b',
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+  'nvidia/llama-3.1-nemotron-70b-instruct',
+  'meta/muse-glimmer-30b',
+  'meta/llama-3.1-8b-instruct',
+  'meta/llama-3.1-70b-instruct',
+  'meta/llama-3.3-70b-instruct',
+  'thinkingmachines/inkling',
+  'poolside/laguna-xs-2.1',
+  'z-ai/glm-5.2',
+  'minimaxai/minimax-m3',
+  'google/diffusiongemma-26b-a4b-it',
+  'google/gemma-2-9b-it',
+  'stepfun-ai/step-3.7-flash',
+  'mistralai/mixtral-8x7b-instruct-v0.1',
+  'mistralai/mistral-7b-instruct-v0.3',
+  'microsoft/phi-3-medium-128k-instruct',
+  'qwen/qwen2.5-7b-instruct',
+  'ibm/granite-3.0-8b-instruct',
+])
+
+export function isNvidiaFreeChatModel(model: OpenRouterModel): boolean {
+  return NVIDIA_FREE_CHAT_MODELS.has(model.id)
 }
 
 export async function listModels(

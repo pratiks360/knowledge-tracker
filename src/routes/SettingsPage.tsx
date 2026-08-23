@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSaveUserSettings, useUserSettings } from '@/lib/queries/settings'
-import { listModels, isFreeModel, pingModel, PROVIDER_BASE, cloudflareBase, AIError } from '@/lib/ai'
+import {
+  listModels,
+  isFreeModel,
+  isNvidiaFreeChatModel,
+  pingModel,
+  PROVIDER_BASE,
+  cloudflareBase,
+  AIError,
+} from '@/lib/ai'
 import { AutofillSettings } from '@/components/AutofillSettings'
 import { ExportBackup } from '@/components/ExportBackup'
 import { SemanticSearchSettings } from '@/components/SemanticSearchSettings'
@@ -40,10 +48,10 @@ const PROVIDER_META: Record<AIProvider, ProviderMeta> = {
     modelField: 'nvidia_model',
     listsModels: true,
     keyPlaceholder: 'nvapi-…',
-    hasFreeFilter: false,
+    hasFreeFilter: true,
     keyUrl: 'https://build.nvidia.com',
     blurb:
-      'Models from build.nvidia.com are free to call with an nvapi- key. Grab one from any model page → “Get API Key”.',
+      'Models from build.nvidia.com are free to call with an nvapi- key. Grab one from any model page → “Get API Key”. Not every listed model has a free hosted endpoint — keep “Free models only” checked.',
   },
   cloudflare: {
     label: 'Cloudflare',
@@ -99,15 +107,17 @@ export function SettingsPage() {
     retry: false,
   })
 
+  const isFree = provider === 'nvidia' ? isNvidiaFreeChatModel : isFreeModel
+
   const visibleModels = useMemo(() => {
     if (!models) return []
     // Embedding-only models (e.g. NVIDIA's nemoretriever-*-embed-*) don't serve chat completions —
     // hide them here so they can't be picked as the chat model by mistake. The dedicated embedding
     // model picker (Settings → Semantic search) is the only place they should show up.
     const chatCapable = models.filter((m) => !/embed|retriever/i.test(m.id))
-    const filtered = meta.hasFreeFilter && freeOnly ? chatCapable.filter(isFreeModel) : chatCapable
+    const filtered = meta.hasFreeFilter && freeOnly ? chatCapable.filter(isFree) : chatCapable
     return [...filtered].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
-  }, [models, freeOnly, meta.hasFreeFilter])
+  }, [models, freeOnly, meta.hasFreeFilter, isFree])
 
   const selectedModel = settings?.[meta.modelField] ?? ''
 
@@ -296,7 +306,7 @@ export function SettingsPage() {
                 {visibleModels.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name ?? m.id}
-                    {meta.hasFreeFilter && isFreeModel(m) ? ' (free)' : ''}
+                    {meta.hasFreeFilter && isFree(m) ? ' (free)' : ''}
                   </option>
                 ))}
               </select>
