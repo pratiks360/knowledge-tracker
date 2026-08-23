@@ -101,7 +101,11 @@ export function SettingsPage() {
 
   const visibleModels = useMemo(() => {
     if (!models) return []
-    const filtered = meta.hasFreeFilter && freeOnly ? models.filter(isFreeModel) : models
+    // Embedding-only models (e.g. NVIDIA's nemoretriever-*-embed-*) don't serve chat completions —
+    // hide them here so they can't be picked as the chat model by mistake. The dedicated embedding
+    // model picker (Settings → Semantic search) is the only place they should show up.
+    const chatCapable = models.filter((m) => !/embed|retriever/i.test(m.id))
+    const filtered = meta.hasFreeFilter && freeOnly ? chatCapable.filter(isFreeModel) : chatCapable
     return [...filtered].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id))
   }, [models, freeOnly, meta.hasFreeFilter])
 
