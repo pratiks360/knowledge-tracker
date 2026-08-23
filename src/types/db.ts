@@ -118,6 +118,13 @@ export type UserSettingsRow = {
   cloudflare_account_id: string | null
   cloudflare_model: string | null
   owner_email: string | null
+  // Nightly auto-fill: spend leftover free credits generating missing details.
+  autofill_enabled: boolean
+  autofill_hour: number
+  autofill_max_per_run: number
+  autofill_last_run: string | null
+  autofill_last_count: number | null
+  autofill_last_status: string | null
   updated_at?: string
 }
 

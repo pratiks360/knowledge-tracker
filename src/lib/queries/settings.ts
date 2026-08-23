@@ -65,6 +65,9 @@ export function useSaveUserSettings() {
           | 'cloudflare_api_key'
           | 'cloudflare_account_id'
           | 'cloudflare_model'
+          | 'autofill_enabled'
+          | 'autofill_hour'
+          | 'autofill_max_per_run'
         >
       >
     ) => {
