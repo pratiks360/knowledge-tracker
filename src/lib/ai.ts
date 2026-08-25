@@ -547,7 +547,7 @@ export async function generateRoadmapFromChat(
 }
 
 /** Config for the provider generating embeddings — reuses that provider's stored key. */
-export type EmbeddingConfig = Omit<AIConfig, 'provider'> & { provider: 'nvidia' | 'cloudflare' }
+export type EmbeddingConfig = AIConfig
 
 /** Embeds one string via an OpenAI-compatible /embeddings endpoint. Must return 768-dim vectors. */
 export async function embedText(cfg: EmbeddingConfig, text: string): Promise<number[]> {

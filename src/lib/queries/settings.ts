@@ -44,9 +44,9 @@ export function resolveEmbeddingConfig(
     if (!apiKey || !accountId) return null
     return { provider, apiKey, model: settings.embedding_model, baseUrl: cloudflareBase(accountId) }
   }
-  const apiKey = settings.nvidia_api_key
+  const apiKey = provider === 'nvidia' ? settings.nvidia_api_key : settings.openrouter_api_key
   if (!apiKey) return null
-  return { provider, apiKey, model: settings.embedding_model, baseUrl: PROVIDER_BASE.nvidia }
+  return { provider, apiKey, model: settings.embedding_model, baseUrl: PROVIDER_BASE[provider] }
 }
 
 export function useEmbeddingConfig(): EmbeddingConfig | null {
@@ -82,7 +82,12 @@ export function useRunAutofillNow() {
   return useMutation({
     mutationFn: async (): Promise<RunAutofillResult> => {
       const { data, error } = await supabase.functions.invoke('nightly-autofill', { body: {} })
-      if (error) throw error
+      if (error) {
+        // The function returns a JSON { error } body even on failure — surface that
+        // instead of supabase-js's generic "non-2xx status code" message.
+        const body = await (error as { context?: Response }).context?.json?.().catch(() => null)
+        throw new Error(body?.error ?? error.message)
+      }
       return { filled: Number(data?.filled ?? 0), status: String(data?.status ?? 'ok') }
     },
     onSuccess: () => {

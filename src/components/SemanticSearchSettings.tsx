@@ -3,9 +3,16 @@ import { useSaveUserSettings, useUserSettings, resolveEmbeddingConfig } from '@/
 import { useBuildSearchIndex } from '@/lib/queries/embeddings'
 import { AIError } from '@/lib/ai'
 
-const MODEL_HINT: Record<'nvidia' | 'cloudflare', string> = {
+const MODEL_HINT: Record<'openrouter' | 'nvidia' | 'cloudflare', string> = {
   cloudflare: '@cf/baai/bge-base-en-v1.5',
   nvidia: 'nvidia/nv-embedqa-e5-v5 (must return 768-dim vectors)',
+  openrouter: 'openai/text-embedding-3-small (must return 768-dim vectors)',
+}
+
+const PROVIDER_LABEL: Record<'openrouter' | 'nvidia' | 'cloudflare', string> = {
+  openrouter: 'OpenRouter',
+  nvidia: 'NVIDIA',
+  cloudflare: 'Cloudflare',
 }
 
 export function SemanticSearchSettings() {
@@ -19,11 +26,11 @@ export function SemanticSearchSettings() {
   const model = settings?.embedding_model ?? ''
   const cfg = resolveEmbeddingConfig(settings)
 
-  const availableProviders = (['cloudflare', 'nvidia'] as const).filter((p) =>
-    p === 'cloudflare'
-      ? settings?.cloudflare_api_key && settings?.cloudflare_account_id
-      : settings?.nvidia_api_key
-  )
+  const availableProviders = (['openrouter', 'cloudflare', 'nvidia'] as const).filter((p) => {
+    if (p === 'cloudflare') return settings?.cloudflare_api_key && settings?.cloudflare_account_id
+    if (p === 'openrouter') return settings?.openrouter_api_key
+    return settings?.nvidia_api_key
+  })
 
   const handleBuild = () => {
     if (!cfg) return
@@ -51,7 +58,8 @@ export function SemanticSearchSettings() {
 
       {availableProviders.length === 0 && (
         <p className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">
-          Configure a Cloudflare or NVIDIA key above first — both offer free embedding models.
+          Configure an OpenRouter, Cloudflare, or NVIDIA key above first — all three offer free
+          embedding models.
         </p>
       )}
 
@@ -66,7 +74,7 @@ export function SemanticSearchSettings() {
                   provider === p ? 'bg-surface-hover text-text' : 'text-muted hover:text-text'
                 }`}
               >
-                {p === 'cloudflare' ? 'Cloudflare' : 'NVIDIA'}
+                {PROVIDER_LABEL[p]}
               </button>
             ))}
           </div>

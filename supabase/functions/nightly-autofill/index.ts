@@ -27,61 +27,66 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type, x-cron-secret',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-cron-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  )
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-  const cronSecret = Deno.env.get('CRON_SECRET')
-  const isCron = !!cronSecret && req.headers.get('x-cron-secret') === cronSecret
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const isCron = !!cronSecret && req.headers.get('x-cron-secret') === cronSecret
 
-  if (isCron) {
-    const hour = new Date().getUTCHours()
-    const { data: settingsRows, error: sErr } = await supabase
+    if (isCron) {
+      const hour = new Date().getUTCHours()
+      const { data: settingsRows, error: sErr } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('autofill_enabled', true)
+        .eq('autofill_hour', hour)
+      if (sErr) return json({ error: sErr.message }, 500)
+
+      const summary: Record<string, unknown>[] = []
+      for (const s of settingsRows ?? []) {
+        summary.push(await runForUser(supabase, s))
+      }
+      return json({ ran: summary.length, users: summary })
+    }
+
+    // Manual "Run now": authenticate the caller as a real user via their own JWT,
+    // then run just for them regardless of autofill_enabled/autofill_hour.
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    )
+    const {
+      data: { user },
+      error: authError,
+    } = await userClient.auth.getUser()
+    if (authError || !user) return json({ error: 'Unauthorized' }, 401)
+
+    const { data: settings, error: sErr } = await supabase
       .from('user_settings')
       .select('*')
-      .eq('autofill_enabled', true)
-      .eq('autofill_hour', hour)
-    if (sErr) return json({ error: sErr.message }, 500)
+      .eq('user_id', user.id)
+      .single()
+    if (sErr || !settings) return json({ error: 'No settings found for this user' }, 404)
 
-    const summary: Record<string, unknown>[] = []
-    for (const s of settingsRows ?? []) {
-      summary.push(await runForUser(supabase, s))
-    }
-    return json({ ran: summary.length, users: summary })
+    const result = await runForUser(supabase, settings)
+    return json(result)
+  } catch (err) {
+    return json({ error: `Autofill error: ${(err as Error).message}` }, 500)
   }
-
-  // Manual "Run now": authenticate the caller as a real user via their own JWT,
-  // then run just for them regardless of autofill_enabled/autofill_hour.
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
-  const userClient = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-    { global: { headers: { Authorization: authHeader } } }
-  )
-  const {
-    data: { user },
-    error: authError,
-  } = await userClient.auth.getUser()
-  if (authError || !user) return json({ error: 'Unauthorized' }, 401)
-
-  const { data: settings, error: sErr } = await supabase
-    .from('user_settings')
-    .select('*')
-    .eq('user_id', user.id)
-    .single()
-  if (sErr || !settings) return json({ error: 'No settings found for this user' }, 404)
-
-  const result = await runForUser(supabase, settings)
-  return json(result)
 })
 
 function buildProviders(s: Record<string, unknown>): ProviderCfg[] {
@@ -191,10 +196,11 @@ async function runForUser(supabase: any, s: Record<string, unknown>) {
         filled++
         filledList.push({ id: String(node.id), title: String(node.title) })
         done = true
-      } else if (res.exhausted) {
-        providerIdx++ // this provider is out of free quota — rotate to the next
       } else {
-        done = true // transient/other error for this node — skip it, keep the provider
+        // Any failure — quota exhaustion, a bad/misconfigured model, or a transient
+        // error — rotates to the next provider and retries this same node, rather
+        // than giving up on the whole run just because one provider is broken.
+        providerIdx++
       }
     }
     await sleep(PAUSE_MS)
