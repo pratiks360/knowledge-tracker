@@ -129,7 +129,7 @@ export type UserSettingsRow = {
   // Semantic search: which configured provider (reusing its existing key) generates
   // embeddings, and the embedding model id. Must produce 768-dim vectors — e.g.
   // Cloudflare's "@cf/baai/bge-base-en-v1.5".
-  embedding_provider: 'nvidia' | 'cloudflare' | null
+  embedding_provider: AIProvider | null
   embedding_model: string | null
   embeddings_built_at: string | null
   updated_at?: string
