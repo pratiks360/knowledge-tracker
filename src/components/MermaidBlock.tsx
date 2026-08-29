@@ -17,7 +17,15 @@ function loadMermaid(): Promise<MermaidApi> {
     mermaidPromise = import(/* @vite-ignore */ MERMAID_CDN).then((mod) => {
       const m = (mod as { default: MermaidApi }).default
       const dark = document.documentElement.classList.contains('dark')
-      m.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'strict' })
+      m.initialize({
+        startOnLoad: false,
+        theme: dark ? 'dark' : 'default',
+        securityLevel: 'strict',
+        // Otherwise mermaid injects its own "bomb" error graphic straight into the DOM
+        // (outside our component's control) on a parse failure — we handle the failure
+        // ourselves below by falling back to the raw source instead.
+        suppressErrorRendering: true,
+      })
       return m
     })
   }
