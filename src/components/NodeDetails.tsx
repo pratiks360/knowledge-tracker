@@ -49,6 +49,7 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
   const [showOptions, setShowOptions] = useState(false)
   const [length, setLength] = useState<DetailsLength>('standard')
   const [instructions, setInstructions] = useState('')
+  const [webSearch, setWebSearch] = useState(false)
 
   const hasDetails = !!node.details_md?.trim()
   const sources = resources ?? []
@@ -69,6 +70,7 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
       const details = await generateNodeDetails(aiConfig, buildContext(node, ancestors, sources), {
         length,
         instructions: instructions.trim() || undefined,
+        webSearch,
       })
       // Persist immediately so it survives reloads/navigation. Stamp the time so we can
       // detect when newer resources make the write-up stale.
@@ -139,6 +141,17 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
               ))}
             </div>
           </div>
+          {aiConfig.provider === 'openrouter' && (
+            <label className="flex items-center gap-2 text-xs text-muted">
+              <input
+                type="checkbox"
+                checked={webSearch}
+                onChange={(e) => setWebSearch(e.target.checked)}
+              />
+              Ground with live web search (like Google&apos;s AI Mode) — pulls in current facts
+              instead of relying only on the model&apos;s training data.
+            </label>
+          )}
           <div>
             <label
               htmlFor="details-instructions"

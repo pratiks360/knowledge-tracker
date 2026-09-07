@@ -132,10 +132,17 @@ const DETAILS_LENGTH_GUIDANCE: Record<DetailsLength, string> = {
 
 export function detailsNodePrompt(
   context: string,
-  opts: { length?: DetailsLength; instructions?: string } = {}
+  opts: { length?: DetailsLength; instructions?: string; online?: boolean } = {}
 ) {
   const length = opts.length ?? 'standard'
   const instructions = opts.instructions?.trim()
+  const freshness = opts.online
+    ? `\n\nYou have live web search available — like Google's AI Mode, ground this in current, real
+sources rather than only prior knowledge. Pull in specifics (current versions, terminology, best
+practices, recent changes) where they matter. CRITICAL: put facts directly into the write-up as plain
+text — do NOT include raw URLs, markdown links, bracketed citations, or footnotes; write it as a normal
+explainer, not an annotated search result.`
+    : ''
 
   let system = `You are a study assistant. Write a well-structured explainer in Markdown about the
 learning topic below, weaving together everything in the provided context — the topic's own notes AND
@@ -146,7 +153,7 @@ If a "Topic path" is provided, the topic is a subtopic: scope the explainer to t
 title relative to its parents rather than as a generic word. E.g. path "Java > Version" means Java's
 release versions and their changelogs — not the concept of versioning in general.
 
-${DETAILS_STRUCTURE[length]}
+${DETAILS_STRUCTURE[length]}${freshness}
 
 Prefer the specifics from the provided resources over generic filler. Do not invent facts that contradict
 the sources; you may add widely-known foundational context to connect ideas, but keep it accurate.

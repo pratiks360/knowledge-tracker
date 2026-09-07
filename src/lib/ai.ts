@@ -622,11 +622,19 @@ export type { DetailsLength }
 export async function generateNodeDetails(
   cfg: AIConfig,
   context: string,
-  opts: { length?: DetailsLength; instructions?: string } = {}
+  opts: { length?: DetailsLength; instructions?: string; webSearch?: boolean } = {}
 ): Promise<string> {
   const length = opts.length ?? 'standard'
-  const { system, user } = detailsNodePrompt(context, { length, instructions: opts.instructions })
-  return chatText({ ...cfg, system, user, maxTokens: DETAILS_MAX_TOKENS[length] })
+  // OpenRouter's `:online` suffix runs a live web search before answering — the same
+  // grounding Google's AI Mode does. NVIDIA/Cloudflare have no equivalent.
+  const online = !!opts.webSearch && cfg.provider === 'openrouter'
+  const { system, user } = detailsNodePrompt(context, {
+    length,
+    instructions: opts.instructions,
+    online,
+  })
+  const model = online ? `${cfg.model}:online` : cfg.model
+  return chatText({ ...cfg, model, system, user, maxTokens: DETAILS_MAX_TOKENS[length] })
 }
 
 /** Merges appended blocks back into the body of a note, returning the rewritten Markdown. */
