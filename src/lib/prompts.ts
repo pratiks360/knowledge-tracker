@@ -100,11 +100,32 @@ facts not present in the material — examples should illustrate it, not contrad
 
 export type DetailsLength = 'brief' | 'standard' | 'in-depth'
 
+// Brief gets its own leaner shape (TL;DR + scannable bullets) rather than just a shorter
+// version of the standard essay structure — optimized for fast review, not a first deep read.
+const DETAILS_STRUCTURE: Record<DetailsLength, string> = {
+  brief: `Structure it for fast scanning, not a deep read:
+- Start with a 1-2 sentence TL;DR: what it is and why it matters.
+- Then "Key points" as tight bullets (not prose paragraphs) — the facts someone needs to recall,
+  not a narrative. Fold in how the pieces relate as part of the bullets rather than a separate
+  "how it fits together" section.
+- Include a Mermaid diagram only if it REPLACES a chunk of prose rather than supplementing it —
+  e.g. a flow, sequence, or hierarchy that would otherwise take several bullets to describe.
+- Include one example only if a single concrete case clarifies more than the bullets alone.
+- No separate "Overview" section — the TL;DR is the overview.`,
+  standard: `Structure it with clear headings: an overview, the key concepts explained in depth, how the
+pieces fit together, and (if the sources support it) practical examples or applications. Where a diagram
+genuinely aids understanding (an architecture, a flow, a sequence of steps, a hierarchy, or how components
+relate), include a Mermaid diagram — use diagrams sparingly, only when they clarify more than prose.`,
+  'in-depth': `Structure it with clear headings: an overview, the key concepts explained in depth, how the
+pieces fit together, nuances/edge cases, and practical examples or applications where the sources support
+them. Where a diagram genuinely aids understanding (an architecture, a flow, a sequence of steps, a
+hierarchy, or how components relate), include a Mermaid diagram — use diagrams sparingly, only when they
+clarify more than prose.`,
+}
+
 const DETAILS_LENGTH_GUIDANCE: Record<DetailsLength, string> = {
-  brief:
-    'Keep it concise — a short overview plus the most important points only, roughly 2–4 short sections.',
-  standard:
-    'Aim for a thorough but focused write-up with a handful of well-developed sections.',
+  brief: 'Keep it short overall — this is for quick review, not a first deep read.',
+  standard: 'Aim for a thorough but focused write-up with a handful of well-developed sections.',
   'in-depth':
     'Be comprehensive and detailed — cover the topic in depth with multiple sections, nuances, and examples where the sources support them.',
 }
@@ -116,25 +137,23 @@ export function detailsNodePrompt(
   const length = opts.length ?? 'standard'
   const instructions = opts.instructions?.trim()
 
-  let system = `You are a study assistant. Write a comprehensive, well-structured explainer in Markdown
-about the learning topic below, weaving together everything in the provided context — the topic's own
-notes AND any attached resources (web pages, YouTube transcripts). Merge overlapping material from the
-different sources into one coherent piece rather than repeating each source separately.
+  let system = `You are a study assistant. Write a well-structured explainer in Markdown about the
+learning topic below, weaving together everything in the provided context — the topic's own notes AND
+any attached resources (web pages, YouTube transcripts). Merge overlapping material from the different
+sources into one coherent piece rather than repeating each source separately.
 
 If a "Topic path" is provided, the topic is a subtopic: scope the explainer to that path and read the
 title relative to its parents rather than as a generic word. E.g. path "Java > Version" means Java's
 release versions and their changelogs — not the concept of versioning in general.
 
-Structure it with clear headings: an overview, the key concepts explained in depth, how the pieces fit
-together, and (if the sources support it) practical examples or applications. Prefer the specifics from
-the provided resources over generic filler. Do not invent facts that contradict the sources; you may add
-widely-known foundational context to connect ideas, but keep it accurate.
+${DETAILS_STRUCTURE[length]}
 
-Where a diagram genuinely aids understanding (an architecture, a flow, a sequence of steps, a hierarchy,
-or how components relate), include a Mermaid diagram in a \`\`\`mermaid fenced code block with valid
-Mermaid syntax (flowchart, sequenceDiagram, classDiagram, erDiagram, etc.). Keep node labels short and
-plain — avoid parentheses/quotes inside labels that break parsing. Use diagrams sparingly, only when they
-clarify more than prose. Do not force one where it doesn't help.
+Prefer the specifics from the provided resources over generic filler. Do not invent facts that contradict
+the sources; you may add widely-known foundational context to connect ideas, but keep it accurate.
+
+When you do include a Mermaid diagram, put it in a \`\`\`mermaid fenced code block with valid Mermaid
+syntax (flowchart, sequenceDiagram, classDiagram, erDiagram, etc.). Keep node labels short and plain —
+avoid parentheses/quotes inside labels that break parsing. Do not force a diagram where it doesn't help.
 
 Length: ${DETAILS_LENGTH_GUIDANCE[length]}`
 
