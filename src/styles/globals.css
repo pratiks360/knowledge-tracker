@@ -33,6 +33,17 @@
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-xl: 24px;
+
+  /* Elevation scale — one set of shadows for cards, menus and modals instead of ad-hoc
+     values. Dark surfaces need a heavier, tighter shadow plus a 1px inner highlight to
+     read as raised at all. */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-md: 0 6px 16px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-lg: 0 18px 40px -12px rgba(0, 0, 0, 0.65);
+
+  --color-accent-soft: rgba(124, 176, 255, 0.12);
+  --color-ring: rgba(124, 176, 255, 0.55);
+  --header-bg: rgba(16, 19, 25, 0.82);
 }
 
 :root[data-theme='light'] {
@@ -56,6 +67,14 @@
   --color-success: #16a34a;
   --color-warning: #b45309;
   --color-error: #dc2626;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 6px 16px -6px rgba(15, 23, 42, 0.14), 0 2px 4px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 18px 40px -14px rgba(15, 23, 42, 0.28);
+
+  --color-accent-soft: rgba(37, 99, 235, 0.09);
+  --color-ring: rgba(37, 99, 235, 0.5);
+  --header-bg: rgba(244, 245, 247, 0.85);
 }
 
 /* Drive Tailwind Typography from the theme tokens so `.prose` content stays
@@ -152,6 +171,81 @@ body {
 
 a {
   color: inherit;
+}
+
+/* Keyboard focus: a visible ring on everything interactive. Many controls here use
+   `outline-none` for their mouse styling; :focus-visible only fires for keyboard
+   focus, so this restores the cue without adding rings to mouse clicks. */
+:where(a, button, input, select, textarea, summary, [role='button'], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+select:not(:disabled),
+summary {
+  cursor: pointer;
+}
+
+/* One shared feel for state changes — hover/press colour and border shifts. */
+button,
+a,
+input,
+select,
+textarea {
+  transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+button:not(:disabled):active {
+  transform: translateY(0.5px);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+/* Numerals line up in stats, counts and progress readouts instead of jittering. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Headings read as one family: balanced wrapping avoids a lone orphan word on short titles. */
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Entrance for modals/menus: short, decelerating, and dropped entirely under
+   reduced-motion (rule above). */
+@keyframes kg-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-pop {
+  animation: kg-pop 160ms ease-out both;
 }
 
 ::-webkit-scrollbar {

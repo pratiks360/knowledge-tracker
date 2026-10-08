@@ -15,6 +15,7 @@ export default {
         muted: 'var(--color-muted)',
         accent: 'var(--color-accent)',
         'accent-2': 'var(--color-accent-2)',
+        'accent-soft': 'var(--color-accent-soft)',
         success: 'var(--color-success)',
         warning: 'var(--color-warning)',
         error: 'var(--color-error)',
@@ -24,6 +25,12 @@ export default {
         // names stay as fallbacks for anyone with the static font installed locally.
         sans: ['Inter Variable', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
         display: ['Space Grotesk Variable', 'Space Grotesk', 'Inter Variable', 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        sm: 'var(--shadow-sm)',
+        md: 'var(--shadow-md)',
+        lg: 'var(--shadow-lg)',
+        xl: 'var(--shadow-lg)',
       },
       borderRadius: {
         sm: 'var(--radius-sm)',

@@ -21,15 +21,29 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-bg px-6">
-      <div className="flex flex-col items-center gap-2 text-center">
+    <div
+      className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-bg px-6"
+      style={{ backgroundImage: 'radial-gradient(60rem 28rem at 50% -8rem, var(--color-accent-soft), transparent)' }}
+    >
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span
+          aria-hidden="true"
+          className="grid h-12 w-12 place-items-center rounded-2xl bg-accent text-bg shadow-md"
+        >
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="6" cy="6" r="2.4" />
+            <circle cx="18" cy="8" r="2.4" />
+            <circle cx="12" cy="18" r="2.4" />
+            <path d="M7.8 7.2l8.4.4M7.4 8l3.4 8M16.6 10l-3.6 6.2" />
+          </svg>
+        </span>
         <h1 className="font-display text-2xl font-semibold text-text">Knowledge Graph</h1>
         <p className="text-sm text-muted">Your personal learning dashboard</p>
       </div>
 
       <button
         onClick={handleSignIn}
-        className="flex items-center gap-3 rounded-lg border border-border bg-surface px-5 py-3 text-sm font-medium text-text transition hover:bg-surface-hover"
+        className="flex items-center gap-3 rounded-lg border border-border bg-surface px-5 py-3 text-sm font-medium text-text shadow-sm hover:bg-surface-hover hover:shadow-md"
       >
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
           <path
@@ -52,7 +66,11 @@ export function LoginPage() {
         Continue with Google
       </button>
 
-      {error && <p className="text-sm text-error">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-error">
+          {error}
+        </p>
+      )}
 
       <p className="max-w-xs text-center text-xs text-muted">
         This is a private, single-user app. Only the owner&apos;s Google account can sign in.

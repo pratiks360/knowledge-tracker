@@ -173,7 +173,7 @@ export function DashboardPage() {
               <Link
                 key={n.id}
                 to={`/node/${n.id}`}
-                className="flex items-center gap-4 rounded-lg border border-border bg-surface p-4 transition hover:border-accent/40 hover:bg-surface-hover"
+                className="flex items-center gap-4 rounded-lg border border-border bg-surface shadow-sm p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:bg-surface-hover hover:shadow-md"
               >
                 <ProgressRing progress={progress} />
                 <div className="min-w-0">

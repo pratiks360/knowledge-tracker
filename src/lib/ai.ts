@@ -5,6 +5,7 @@ import {
   formatNotesPrompt,
   jdPrepPrompt,
   quizPrompt,
+  roadmapFromOutlinePrompt,
   recapPrompt,
   reduceSummariesPrompt,
   roadmapChatPrompt,
@@ -546,6 +547,33 @@ export async function generateRoadmapFromChat(
   return { title, nodes }
 }
 
+/**
+ * Transcribes a user-pasted outline into a root title + tree without redesigning it.
+ * Larger token budget than a generated roadmap: every outline item must survive, and a
+ * truncated response would silently drop the tail of the user's outline.
+ */
+export async function generateRoadmapFromOutline(
+  cfg: AIConfig,
+  outline: string,
+  titleHint: string,
+  opts: { webSearch?: boolean } = {}
+): Promise<ChatRoadmapProposal> {
+  const online = !!opts.webSearch && cfg.provider === 'openrouter'
+  const { system, user } = roadmapFromOutlinePrompt(outline, titleHint, online)
+  const model = online ? `${cfg.model}:online` : cfg.model
+  const raw = await chatJSON<unknown>({
+    ...cfg,
+    model,
+    system,
+    user,
+    temperature: 0.1,
+    maxTokens: online ? 6500 : 5000,
+  })
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const title = typeof obj.title === 'string' ? obj.title.trim() : ''
+  return { title, nodes: normalizeProposal(obj.nodes ?? raw) }
+}
+
 /** Config for the provider generating embeddings — reuses that provider's stored key. */
 export type EmbeddingConfig = AIConfig
 
@@ -622,11 +650,19 @@ export type { DetailsLength }
 export async function generateNodeDetails(
   cfg: AIConfig,
   context: string,
-  opts: { length?: DetailsLength; instructions?: string } = {}
+  opts: { length?: DetailsLength; instructions?: string; webSearch?: boolean } = {}
 ): Promise<string> {
   const length = opts.length ?? 'standard'
-  const { system, user } = detailsNodePrompt(context, { length, instructions: opts.instructions })
-  return chatText({ ...cfg, system, user, maxTokens: DETAILS_MAX_TOKENS[length] })
+  // OpenRouter's `:online` suffix runs a live web search before answering — the same
+  // grounding Google's AI Mode does. NVIDIA/Cloudflare have no equivalent.
+  const online = !!opts.webSearch && cfg.provider === 'openrouter'
+  const { system, user } = detailsNodePrompt(context, {
+    length,
+    instructions: opts.instructions,
+    online,
+  })
+  const model = online ? `${cfg.model}:online` : cfg.model
+  return chatText({ ...cfg, model, system, user, maxTokens: DETAILS_MAX_TOKENS[length] })
 }
 
 /** Merges appended blocks back into the body of a note, returning the rewritten Markdown. */

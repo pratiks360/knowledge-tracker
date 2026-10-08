@@ -32,6 +32,28 @@ export function useAIConfig(): AIConfig | null {
   return resolveAIConfig(settings)
 }
 
+/**
+ * Live web search is an OpenRouter-only feature (its `:online` suffix), but it shouldn't
+ * require OpenRouter to be the *active* provider — if a key + model are saved, web-search
+ * calls can use them even while chat runs on NVIDIA/Cloudflare. Null when not set up.
+ */
+export function resolveWebSearchConfig(
+  settings: UserSettingsRow | null | undefined
+): AIConfig | null {
+  if (!settings?.openrouter_api_key || !settings.selected_model) return null
+  return {
+    provider: 'openrouter',
+    apiKey: settings.openrouter_api_key,
+    model: settings.selected_model,
+    baseUrl: PROVIDER_BASE.openrouter,
+  }
+}
+
+export function useWebSearchConfig(): AIConfig | null {
+  const { data: settings } = useUserSettings()
+  return resolveWebSearchConfig(settings)
+}
+
 /** Resolves the embedding provider's key + model, reusing that provider's own chat credentials. */
 export function resolveEmbeddingConfig(
   settings: UserSettingsRow | null | undefined

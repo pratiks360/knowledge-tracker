@@ -101,7 +101,7 @@ export function NodeAIActions({ node }: { node: NodeRow }) {
       )}
 
       {active && (
-        <div className="mt-3 rounded-lg border border-border bg-surface-2 p-3">
+        <div className="mt-3 rounded-lg border border-border bg-surface shadow-sm-2 p-3">
           {!configured && (
             <p className="text-sm text-muted">
               Add an OpenRouter key in{' '}

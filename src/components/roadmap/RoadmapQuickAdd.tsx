@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useCreateNode, useNodes, serializeTreeForAI } from '@/lib/queries/nodes'
-import { useAIConfig } from '@/lib/queries/settings'
+import { useAIConfig, useWebSearchConfig } from '@/lib/queries/settings'
 import {
   generateRoadmap,
+  generateRoadmapFromOutline,
   chatJSON,
   AIError,
   type RoadmapProposalNode,
@@ -36,6 +37,7 @@ export function RoadmapQuickAdd({
   onDone: (nodeId: string) => void
 }) {
   const aiConfig = useAIConfig()
+  const webSearchConfig = useWebSearchConfig()
   const createNode = useCreateNode()
   const { data: nodes } = useNodes()
   const [rootId, setRootId] = useState<string | null>(null)
@@ -51,11 +53,11 @@ export function RoadmapQuickAdd({
 
     // Best-effort parent suggestion — mirrors the "Add" flow's auto-placement.
     // Any failure (or no good fit) falls back to a root topic.
-    async function suggestParentId(): Promise<string | null> {
+    async function suggestParentId(rootTitle: string): Promise<string | null> {
       const all = nodes ?? []
       if (!aiConfig || all.length === 0) return null
       try {
-        const prompt = autoPlacementPrompt(title, serializeTreeForAI(all))
+        const prompt = autoPlacementPrompt(rootTitle, serializeTreeForAI(all))
         const proposal = await chatJSON<AutoPlacementResult>({
           ...aiConfig,
           system: prompt.system,
@@ -77,21 +79,42 @@ export function RoadmapQuickAdd({
         return
       }
       try {
+        // Web search runs on the OpenRouter key even when chat is on another provider.
+        const searchConfig = webSearch && webSearchConfig ? webSearchConfig : aiConfig
+        let rootTitle = title
+        let result: RoadmapProposalNode[]
+
+        if (sourceOutline) {
+          // Pasted outline: transcribe it faithfully FIRST (the model also names the root —
+          // the first line of a syllabus is usually a section heading, not the subject), and
+          // only then create the root, so a failed generation leaves nothing behind.
+          const generated = await generateRoadmapFromOutline(searchConfig, sourceOutline, title, {
+            webSearch,
+          })
+          if (!active) return
+          result = generated.nodes
+          rootTitle = generated.title || title
+          if (result.length === 0) {
+            setError('The model couldn’t read that outline. Try pasting it again, or send it to the coach instead.')
+            return
+          }
+        } else {
+          result = []
+        }
+
         // 1. Best-effort placement: tuck the topic under the most relevant existing
         //    topic (e.g. "Streams in Java" → under "Java"), else make it a root.
-        const parentId = await suggestParentId()
+        const parentId = await suggestParentId(rootTitle)
         if (!active) return
         // 2. Create the root topic so the roadmap has something to hang under.
-        const root = await createNode.mutateAsync({ title, parent_id: parentId })
+        const root = await createNode.mutateAsync({ title: rootTitle, parent_id: parentId })
         if (!active) return
         setRootId(root.id)
-        // 3. Ask for the subtopic tree for this topic. When the user pasted an outline,
-        //    hand it to the model as the backbone to clean up and organize.
-        const context = sourceOutline
-          ? `Topic: ${title}\n\nSource outline (the user pasted this — organize the roadmap around it):\n${sourceOutline}`
-          : `Topic: ${title}`
-        const result = await generateRoadmap(aiConfig, context, { webSearch })
-        if (!active) return
+        // 3. Bare topic: ask the model for a subtopic tree.
+        if (!sourceOutline) {
+          result = await generateRoadmap(searchConfig, `Topic: ${title}`, { webSearch })
+          if (!active) return
+        }
         if (result.length === 0) {
           // Root already exists; let the user open it and retry from the topic page.
           setError('The model didn’t return any subtopics — the topic was created, open it and try “Generate roadmap” again.')
@@ -131,7 +154,7 @@ export function RoadmapQuickAdd({
       onClick={error ? onClose : undefined}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-border bg-surface p-5"
+        className="w-full max-w-md rounded-lg border border-border bg-surface shadow-lg animate-pop p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-1 text-sm font-medium text-text">

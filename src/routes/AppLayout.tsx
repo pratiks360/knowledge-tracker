@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth-context'
 import { TreeSidebar } from '@/components/tree/TreeSidebar'
 import { GlobalSearch } from '@/components/GlobalSearch'
@@ -7,6 +7,20 @@ import { AIStatusLED } from '@/components/AIStatusLED'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { ResizeHandle } from '@/components/ResizeHandle'
 import { useUIStore } from '@/lib/store'
+
+/** Primary destinations. Settings sits in the same group so the current page is always lit. */
+const NAV_ITEMS = [
+  { to: '/graph', label: 'Graph', hideOnMobile: true },
+  { to: '/stats', label: 'Stats', hideOnMobile: true },
+  { to: '/present', label: 'Present', hideOnMobile: true },
+  { to: '/settings', label: 'Settings', hideOnMobile: false },
+]
+
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  'rounded-md px-2.5 py-1.5 text-sm font-medium ' +
+  (isActive
+    ? 'bg-accent-soft text-text'
+    : 'text-muted hover:bg-surface-hover hover:text-text')
 
 export function AppLayout() {
   const { user, signOut } = useAuth()
@@ -28,7 +42,17 @@ export function AppLayout() {
 
   return (
     <div className="flex h-dvh flex-col bg-bg">
-      <header className="shrink-0 border-b border-border">
+      {/* First tab stop: lets keyboard users jump past the header and tree. */}
+      <a
+        href="#main-content"
+        className="sr-only z-[60] rounded-md bg-accent px-3 py-2 text-sm font-medium text-bg focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+      >
+        Skip to content
+      </a>
+      <header
+        className="relative z-30 shrink-0 border-b border-border backdrop-blur-md"
+        style={{ background: 'var(--header-bg)' }}
+      >
         <div className="flex h-14 items-center gap-3 px-3 sm:px-4">
           <button
             onClick={() => setMobileNavOpen(!mobileNavOpen)}
@@ -44,9 +68,23 @@ export function AppLayout() {
             </svg>
           </button>
 
-          <Link to="/" className="font-display shrink-0 text-base font-semibold text-text">
+          <Link
+            to="/"
+            className="font-display flex shrink-0 items-center gap-2 text-base font-semibold tracking-tight text-text"
+          >
+            <span
+              aria-hidden="true"
+              className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-bg shadow-sm"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="6" cy="6" r="2.4" />
+                <circle cx="18" cy="8" r="2.4" />
+                <circle cx="12" cy="18" r="2.4" />
+                <path d="M7.8 7.2l8.4.4M7.4 8l3.4 8M16.6 10l-3.6 6.2" />
+              </svg>
+            </span>
             <span className="hidden sm:inline">Knowledge Graph</span>
-            <span className="sm:hidden">KG</span>
+            <span className="sr-only sm:hidden">Knowledge Graph</span>
           </Link>
 
           {/* Search gets the full width of its own row on mobile, where sharing the
@@ -56,29 +94,31 @@ export function AppLayout() {
           </div>
           <div className="flex-1 md:hidden" />
 
-          <nav className="flex shrink-0 items-center gap-2 text-sm text-muted sm:gap-4">
+          <nav aria-label="Primary" className="flex shrink-0 items-center gap-1 sm:gap-1.5">
             <ThemeToggle />
             <AIStatusLED />
-            <Link to="/graph" className="hidden transition hover:text-text sm:inline">
-              Graph
-            </Link>
-            <Link to="/stats" className="hidden transition hover:text-text sm:inline">
-              Stats
-            </Link>
-            <Link to="/present" className="hidden transition hover:text-text sm:inline">
-              Present
-            </Link>
-            <Link to="/settings" className="transition hover:text-text">
-              Settings
-            </Link>
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={(state) =>
+                  navLinkClass(state) + (item.hideOnMobile ? ' hidden sm:inline-block' : '')
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
             {user?.user_metadata?.avatar_url && (
               <img
                 src={user.user_metadata.avatar_url}
                 alt=""
-                className="hidden h-7 w-7 rounded-full border border-border sm:block"
+                className="ml-1 hidden h-7 w-7 rounded-full border border-border sm:block"
               />
             )}
-            <button onClick={handleSignOut} className="transition hover:text-text">
+            <button
+              onClick={handleSignOut}
+              className="rounded-md px-2.5 py-1.5 text-sm text-muted hover:bg-surface-hover hover:text-text"
+            >
               <span className="hidden sm:inline">Sign out</span>
               <span className="sm:hidden">Out</span>
             </button>
@@ -121,7 +161,7 @@ export function AppLayout() {
           </div>
         )}
 
-        <div className="min-w-0 flex-1 overflow-y-auto">
+        <div id="main-content" tabIndex={-1} className="min-w-0 flex-1 overflow-y-auto outline-none">
           <Outlet />
         </div>
       </main>

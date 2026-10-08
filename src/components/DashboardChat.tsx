@@ -8,7 +8,7 @@ import {
   useGlobalChatMessages,
   useSendGlobalChatMessage,
 } from '@/lib/queries/chat'
-import { useAIConfig } from '@/lib/queries/settings'
+import { useAIConfig, useWebSearchConfig } from '@/lib/queries/settings'
 import { ChatMessage } from '@/components/ChatMessage'
 import { ChatTabs } from '@/components/ChatTabs'
 
@@ -79,6 +79,7 @@ export function DashboardChat({
   onActiveMessages: (messages: ChatMessageRow[]) => void
 }) {
   const aiConfig = useAIConfig()
+  const webSearchConfig = useWebSearchConfig()
   const { data: threads } = useChatThreads()
   const createThread = useCreateThread()
   const deleteThread = useDeleteThread()
@@ -97,7 +98,9 @@ export function DashboardChat({
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const configured = !!aiConfig
-  const webSearchAvailable = aiConfig?.provider === 'openrouter'
+  // Available whenever an OpenRouter key + model are saved — even if chat itself runs on
+  // another provider; web-search turns are routed to the OpenRouter config below.
+  const webSearchAvailable = !!webSearchConfig
   const hasMessages = !!messages && messages.length > 0
 
   // Fall back to the most recent conversation on load, and after the active tab
@@ -157,11 +160,12 @@ export function DashboardChat({
     // Detected intent still sends the message, so the conversation reads normally
     // and the builder has the user's final instructions in the transcript.
     const alsoBuild = wantsRoadmap(content)
+    const useSearch = webSearch && webSearchAvailable
     sendMessage.mutate(
-      { threadId, content, config: aiConfig, webSearch },
+      { threadId, content, config: useSearch ? webSearchConfig! : aiConfig, webSearch: useSearch },
       {
         onSuccess: () => {
-          if (alsoBuild) onBuildRoadmap(webSearch)
+          if (alsoBuild) onBuildRoadmap(useSearch)
         },
         onError: (err) => setError(err instanceof Error ? err.message : 'Failed to get a reply.'),
       }
@@ -194,7 +198,7 @@ export function DashboardChat({
     onImportOutline({
       title: cleanTitle(outlineLines[0]) || 'Imported roadmap',
       sourceOutline: raw,
-      webSearch: webSearch && !!webSearchAvailable,
+      webSearch: webSearch && webSearchAvailable,
     })
     setDraft('')
   }
@@ -208,7 +212,7 @@ export function DashboardChat({
   }
 
   return (
-    <section className="mb-8 overflow-hidden rounded-lg border border-border bg-surface">
+    <section className="mb-8 overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border px-3 py-3 sm:px-4">
         <div className="min-w-0">
           <h2 className="font-display text-sm font-semibold text-text">Coach</h2>
@@ -219,7 +223,7 @@ export function DashboardChat({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
-            onClick={() => onBuildRoadmap(webSearch)}
+            onClick={() => onBuildRoadmap(webSearch && webSearchAvailable)}
             disabled={!hasMessages || !configured}
             title={
               hasMessages
@@ -341,20 +345,41 @@ export function DashboardChat({
             </button>
           </div>
         )}
-        {webSearchAvailable && (
-          <label
-            className="mb-2 flex w-fit items-center gap-1.5 text-xs text-muted"
-            title="Runs a live web search so current versions, tools, and exam objectives are included"
+        <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setWebSearch((v) => !v)}
+            disabled={!webSearchAvailable}
+            aria-pressed={webSearch && webSearchAvailable}
+            title={
+              webSearchAvailable
+                ? 'Search the live web for current versions, tools, and exam objectives — applies to replies and to Build roadmap'
+                : 'Needs an OpenRouter key + model in Settings (web search runs through OpenRouter)'
+            }
+            className={
+              'flex h-[38px] shrink-0 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ' +
+              (webSearch && webSearchAvailable
+                ? 'border-accent bg-accent/15 text-accent'
+                : 'border-border text-muted hover:border-accent hover:text-text')
+            }
           >
-            <input
-              type="checkbox"
-              checked={webSearch}
-              onChange={(e) => setWebSearch(e.target.checked)}
-            />
-            Include latest (web search)
-          </label>
-        )}
-        <div className="flex gap-2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20" />
+              <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />
+            </svg>
+            Web search
+          </button>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -367,7 +392,7 @@ export function DashboardChat({
           <button
             type="submit"
             disabled={!configured || !draft.trim() || sendMessage.isPending}
-            className="self-end rounded-md bg-accent px-4 py-2 text-sm font-medium text-bg transition hover:opacity-90 disabled:opacity-40"
+            className="h-[38px] self-end rounded-md bg-accent px-4 text-sm font-medium text-bg transition hover:opacity-90 disabled:opacity-40"
           >
             Send
           </button>

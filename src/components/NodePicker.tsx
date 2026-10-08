@@ -50,7 +50,7 @@ export function NodePicker({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[70vh] w-full max-w-md flex-col rounded-lg border border-border bg-surface p-4"
+        className="flex max-h-[70vh] w-full max-w-md flex-col rounded-lg border border-border bg-surface shadow-lg animate-pop p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-3 text-sm font-medium text-text">{title ?? 'Choose a parent'}</h2>
