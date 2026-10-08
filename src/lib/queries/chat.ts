@@ -297,11 +297,14 @@ export function useSendGlobalChatMessage(allNodes: NodeRow[]) {
       content,
       config,
       webSearch,
+      focus,
     }: {
       threadId: string
       content: string
       config: AIConfig
       webSearch: boolean
+      /** An existing roadmap the user selected in the coach — becomes extra context for replies. */
+      focus?: { title: string; tree: string }
     }) => {
       if (!user) throw new Error('Not signed in')
       if (!threadId) throw new Error('No conversation selected')
@@ -333,7 +336,7 @@ export function useSendGlobalChatMessage(allNodes: NodeRow[]) {
       ]
 
       const useWebSearch = webSearch && config.provider === 'openrouter'
-      const system = dashboardChatSystemPrompt(buildGraphContext(allNodes), useWebSearch)
+      const system = dashboardChatSystemPrompt(buildGraphContext(allNodes), useWebSearch, focus)
       const model = useWebSearch ? `${config.model}:online` : config.model
 
       const reply = await chatConversation({ ...config, model, system, history })

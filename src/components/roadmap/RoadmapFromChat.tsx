@@ -4,11 +4,13 @@ import { useAIConfig, useWebSearchConfig } from '@/lib/queries/settings'
 import {
   chatJSON,
   generateRoadmapFromChat,
+  generateRoadmapAdditions,
   AIError,
   type RoadmapProposalNode,
   type AutoPlacementResult,
 } from '@/lib/ai'
 import { autoPlacementPrompt } from '@/lib/prompts'
+import { additionsToFlat, buildRoadmapSeed, type FlatProposalNode } from '@/lib/queries/roadmap'
 import type { ChatMessageRow } from '@/types/db'
 
 // React Flow (inside RoadmapPreview) is heavy — only load it once a proposal exists.
@@ -24,11 +26,14 @@ const RoadmapPreview = lazy(() =>
 export function RoadmapFromChat({
   messages,
   webSearch,
+  targetId,
   onClose,
   onDone,
 }: {
   messages: ChatMessageRow[]
   webSearch?: boolean
+  /** An existing roadmap to modify: additions are generated and merged into it instead of a new root. */
+  targetId?: string
   onClose: () => void
   onDone: (nodeId: string) => void
 }) {
@@ -38,6 +43,12 @@ export function RoadmapFromChat({
   const { data: nodes } = useNodes()
   const [rootId, setRootId] = useState<string | null>(null)
   const [proposal, setProposal] = useState<RoadmapProposalNode[] | null>(null)
+  // Extend mode: the existing subtree plus the proposed additions, ready for the preview.
+  const [extend, setExtend] = useState<{
+    flat: FlatProposalNode[]
+    existingIds: Map<string, string>
+    existingTitles: Set<string>
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'planning' | 'placing'>('planning')
   const started = useRef(false)
@@ -86,6 +97,47 @@ export function RoadmapFromChat({
         const transcript = messages
           .map((m) => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.content}`)
           .join('\n\n')
+        if (targetId) {
+          // Modify an existing roadmap: no new root, just what to add under it.
+          const target = (nodes ?? []).find((n) => n.id === targetId)
+          if (!target) {
+            setError('That roadmap no longer exists.')
+            return
+          }
+          const seed = buildRoadmapSeed(nodes ?? [], targetId)
+          const byKey = new Map(seed.flat.map((f) => [f.key, f]))
+          const depthOf = (f: FlatProposalNode) => {
+            let d = 0
+            let cur: FlatProposalNode | undefined = f
+            while (cur?.parentKey) {
+              d++
+              cur = byKey.get(cur.parentKey)
+            }
+            return d
+          }
+          const treeText = seed.flat.map((f) => `${'  '.repeat(depthOf(f))}${f.title}`).join('\n')
+          const additions = await generateRoadmapAdditions(
+            webSearch && webSearchConfig ? webSearchConfig : aiConfig,
+            transcript,
+            target.title,
+            treeText,
+            { webSearch }
+          )
+          if (!active) return
+          if (additions.length === 0) {
+            setError(
+              'Nothing to add yet. Tell the coach what to change in this roadmap (e.g. “add a Security section”), then build again.'
+            )
+            return
+          }
+          setExtend({
+            flat: [...seed.flat, ...additionsToFlat(additions, seed.flat)],
+            existingIds: seed.existingIds,
+            existingTitles: seed.existingTitles,
+          })
+          return
+        }
+
         const tree = serializeTreeForAI(nodes ?? [])
 
         const { title, nodes: proposed } = await generateRoadmapFromChat(
@@ -124,6 +176,22 @@ export function RoadmapFromChat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  if (extend && targetId) {
+    return (
+      <Suspense fallback={null}>
+        <RoadmapPreview
+          proposal={[]}
+          targetNodeId={targetId}
+          initialFlat={extend.flat}
+          existingIds={extend.existingIds}
+          existingTitles={extend.existingTitles}
+          onClose={() => onDone(targetId)}
+          onMerged={() => onDone(targetId)}
+        />
+      </Suspense>
+    )
+  }
+
   if (proposal && rootId) {
     return (
       <Suspense fallback={null}>
@@ -148,12 +216,16 @@ export function RoadmapFromChat({
         className="w-full max-w-md rounded-lg border border-border bg-surface shadow-lg animate-pop p-5"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-sm font-medium text-text">Building your roadmap</h2>
+        <h2 className="mb-1 text-sm font-medium text-text">
+          {targetId ? 'Updating your roadmap' : 'Building your roadmap'}
+        </h2>
 
         {!error && (
           <p className="text-sm text-muted">
             {phase === 'planning'
-              ? 'Reading your conversation and planning what to learn…'
+              ? targetId
+                ? 'Reading your conversation and working out what to add…'
+                : 'Reading your conversation and planning what to learn…'
               : 'Finding where this fits in your graph…'}
           </p>
         )}

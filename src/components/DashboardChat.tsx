@@ -11,6 +11,7 @@ import {
 import { useAIConfig, useWebSearchConfig } from '@/lib/queries/settings'
 import { ChatMessage } from '@/components/ChatMessage'
 import { ChatTabs } from '@/components/ChatTabs'
+import { getAncestors } from '@/lib/queries/nodes'
 
 /**
  * Phrase-detection for "…create the roadmap". Deliberately conservative: the button
@@ -61,6 +62,21 @@ function cleanTitle(line: string): string {
     .slice(0, 80)
 }
 
+/** Indented titles of the subtree under `rootId`, for the coach's context. */
+function subtreeText(allNodes: NodeRow[], rootId: string): string {
+  const lines: string[] = []
+  const walk = (pid: string, depth: number) => {
+    for (const c of allNodes
+      .filter((n) => n.parent_id === pid)
+      .sort((a, b) => a.order_index - b.order_index)) {
+      lines.push(`${'  '.repeat(depth)}${c.title}`)
+      walk(c.id, depth + 1)
+    }
+  }
+  walk(rootId, 0)
+  return lines.join('\n') || '(no subtopics yet)'
+}
+
 export function DashboardChat({
   allNodes,
   onBuildRoadmap,
@@ -70,7 +86,7 @@ export function DashboardChat({
 }: {
   allNodes: NodeRow[]
   /** Opens the roadmap builder over the current conversation. */
-  onBuildRoadmap: (webSearch: boolean) => void
+  onBuildRoadmap: (webSearch: boolean, targetId?: string) => void
   /** Turns a pasted outline straight into a roadmap, bypassing the conversation. */
   onImportOutline: (input: { title: string; sourceOutline: string; webSearch: boolean }) => void
   /** Fast single-topic add via "add topic: X", with AI placement. */
@@ -94,6 +110,8 @@ export function DashboardChat({
 
   const [draft, setDraft] = useState('')
   const [webSearch, setWebSearch] = useState(false)
+  // An existing roadmap the coach should modify instead of planning a new one.
+  const [targetId, setTargetId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -101,6 +119,20 @@ export function DashboardChat({
   // Available whenever an OpenRouter key + model are saved — even if chat itself runs on
   // another provider; web-search turns are routed to the OpenRouter config below.
   const webSearchAvailable = !!webSearchConfig
+  // Roadmaps you can modify: any topic that already has subtopics (labelled by its path), plus
+  // empty root topics so a freshly-created roadmap can be grown too.
+  const roadmapOptions = useMemo(() => {
+    const parents = new Set(allNodes.map((n) => n.parent_id).filter(Boolean))
+    return allNodes
+      .filter((n) => parents.has(n.id) || !n.parent_id)
+      .map((n) => ({
+        id: n.id,
+        label: [...getAncestors(allNodes, n.id).map((a) => a.title), n.title].join(' › '),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [allNodes])
+  const activeTarget = allNodes.find((n) => n.id === targetId) ?? null
+
   const hasMessages = !!messages && messages.length > 0
 
   // Fall back to the most recent conversation on load, and after the active tab
@@ -162,10 +194,16 @@ export function DashboardChat({
     const alsoBuild = wantsRoadmap(content)
     const useSearch = webSearch && webSearchAvailable
     sendMessage.mutate(
-      { threadId, content, config: useSearch ? webSearchConfig! : aiConfig, webSearch: useSearch },
+      {
+        threadId,
+        content,
+        config: useSearch ? webSearchConfig! : aiConfig,
+        webSearch: useSearch,
+        focus: activeTarget ? { title: activeTarget.title, tree: subtreeText(allNodes, activeTarget.id) } : undefined,
+      },
       {
         onSuccess: () => {
-          if (alsoBuild) onBuildRoadmap(useSearch)
+          if (alsoBuild) onBuildRoadmap(useSearch, activeTarget?.id)
         },
         onError: (err) => setError(err instanceof Error ? err.message : 'Failed to get a reply.'),
       }
@@ -223,7 +261,7 @@ export function DashboardChat({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
-            onClick={() => onBuildRoadmap(webSearch && webSearchAvailable)}
+            onClick={() => onBuildRoadmap(webSearch && webSearchAvailable, activeTarget?.id)}
             disabled={!hasMessages || !configured}
             title={
               hasMessages
@@ -232,7 +270,7 @@ export function DashboardChat({
             }
             className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-bg transition hover:opacity-90 disabled:opacity-40"
           >
-            Build roadmap
+            {activeTarget ? 'Update roadmap' : 'Build roadmap'}
           </button>
         </div>
       </div>
@@ -345,6 +383,29 @@ export function DashboardChat({
             </button>
           </div>
         )}
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+          <label htmlFor="coach-roadmap" className="shrink-0">
+            Work on existing roadmap
+          </label>
+          <select
+            id="coach-roadmap"
+            value={targetId}
+            onChange={(e) => setTargetId(e.target.value)}
+            className="min-w-0 max-w-full flex-1 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs text-text outline-none focus:border-accent sm:max-w-sm"
+          >
+            <option value="">None — plan something new</option>
+            {roadmapOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {activeTarget && (
+            <span className="text-accent">
+              Replies and “Update roadmap” now apply to “{activeTarget.title}”.
+            </span>
+          )}
+        </div>
         <div className="flex items-end gap-2">
           <button
             type="button"

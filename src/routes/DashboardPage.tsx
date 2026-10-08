@@ -25,7 +25,7 @@ export function DashboardPage() {
     webSearch?: boolean
   } | null>(null)
   // …or from the coach conversation.
-  const [chatRoadmap, setChatRoadmap] = useState<{ webSearch: boolean } | null>(null)
+  const [chatRoadmap, setChatRoadmap] = useState<{ webSearch: boolean; targetId?: string } | null>(null)
   // Single topic via "add topic: X" in the coach.
   const [placementTitle, setPlacementTitle] = useState<string | null>(null)
   const [jdPrepOpen, setJdPrepOpen] = useState(false)
@@ -55,7 +55,7 @@ export function DashboardPage() {
     <div className="mx-auto max-w-5xl p-4 sm:p-6">
       <DashboardChat
         allNodes={nodes ?? []}
-        onBuildRoadmap={(webSearch) => setChatRoadmap({ webSearch })}
+        onBuildRoadmap={(webSearch, targetId) => setChatRoadmap({ webSearch, targetId })}
         onImportOutline={setRoadmapInput}
         onAddTopic={setPlacementTitle}
         onActiveMessages={handleActiveMessages}
@@ -80,6 +80,7 @@ export function DashboardPage() {
         <RoadmapFromChat
           messages={chatMessages}
           webSearch={chatRoadmap.webSearch}
+          targetId={chatRoadmap.targetId}
           onClose={() => setChatRoadmap(null)}
           onDone={(nodeId) => {
             setChatRoadmap(null)

@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/auth-context'
-import type { RoadmapProposalNode } from '@/lib/ai'
+import type { RoadmapProposalNode, RoadmapAddition } from '@/lib/ai'
+import type { NodeRow } from '@/types/db'
 
 export interface FlatProposalNode {
   key: string
@@ -32,6 +33,67 @@ export function flattenProposal(
     }
   })
   return result
+}
+
+/**
+ * Seeds the builder from an already-merged subtree. Existing nodes keep their real DB id as
+ * their proposal key (via `existingIds`), so new topics attach under the right existing parent
+ * and nothing already in the graph is duplicated.
+ */
+export function buildRoadmapSeed(allNodes: NodeRow[], rootId: string) {
+  const childrenOf = (pid: string) =>
+    allNodes
+      .filter((n) => n.parent_id === pid)
+      .sort((a, b) => a.order_index - b.order_index || a.title.localeCompare(b.title))
+
+  const flat: FlatProposalNode[] = []
+  const walk = (nodeId: string, parentKey: string | null) => {
+    for (const c of childrenOf(nodeId)) {
+      flat.push({
+        key: c.id,
+        parentKey,
+        title: c.title,
+        description: c.description ?? undefined,
+        prerequisites: [],
+        siblingIndex: flat.length,
+      })
+      walk(c.id, c.id)
+    }
+  }
+  walk(rootId, null)
+
+  const existingIds = new Map(flat.map((f) => [f.key, f.key]))
+  const existingTitles = new Set(flat.map((f) => f.title.trim().toLowerCase()))
+  return { flat, existingIds, existingTitles }
+}
+
+/**
+ * Turns the model's additions into proposal nodes hung off an existing subtree: each top-level
+ * addition's `parentTitle` is matched (case-insensitively) to an existing node, or to null →
+ * directly under the roadmap's root. Unmatched parent titles fall back to the root rather than
+ * being dropped, so a slightly misnamed parent never loses the topic.
+ */
+export function additionsToFlat(
+  additions: RoadmapAddition[],
+  existing: FlatProposalNode[]
+): FlatProposalNode[] {
+  const keyByTitle = new Map(existing.map((f) => [f.title.trim().toLowerCase(), f.key]))
+  const out: FlatProposalNode[] = []
+  additions.forEach((a, i) => {
+    const parentKey = a.parentTitle ? (keyByTitle.get(a.parentTitle.trim().toLowerCase()) ?? null) : null
+    const key = `add-${i}`
+    out.push({
+      key,
+      parentKey,
+      title: a.title,
+      description: a.description,
+      prerequisites: a.prerequisites ?? [],
+      siblingIndex: i,
+    })
+    // flattenProposal keys children `${key}-N`, which can't collide with other `add-N` keys.
+    if (a.children?.length) out.push(...flattenProposal(a.children, key))
+  })
+  return out
 }
 
 export function useMergeRoadmap(targetNodeId: string) {
