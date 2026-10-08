@@ -17,7 +17,7 @@ export function PresentModeControls({ node, allNodes }: { node: NodeRow; allNode
   }
 
   return (
-    <details className="rounded-lg border border-border bg-surface p-3">
+    <details className="rounded-lg border border-border bg-surface shadow-sm p-3">
       <summary className="cursor-pointer text-sm font-medium text-text">
         Present mode
         {node.present_visible && <span className="ml-2 text-xs text-accent-2">Visible</span>}

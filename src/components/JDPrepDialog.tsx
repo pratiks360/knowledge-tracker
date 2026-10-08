@@ -82,7 +82,7 @@ export function JDPrepDialog({
       onClick={phase !== 'preview' ? onClose : undefined}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-surface"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-lg animate-pop"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-border px-4 py-3">

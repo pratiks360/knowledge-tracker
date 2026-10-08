@@ -41,7 +41,7 @@ export function StoryPathEditor({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-lg border border-border bg-surface p-4"
+        className="flex max-h-[80vh] w-full max-w-md flex-col rounded-lg border border-border bg-surface shadow-lg animate-pop p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">

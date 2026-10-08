@@ -121,7 +121,7 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
       </div>
 
       {showOptions && aiConfig && (
-        <div className="mb-3 space-y-3 rounded-lg border border-border bg-surface p-3">
+        <div className="mb-3 space-y-3 rounded-lg border border-border bg-surface shadow-sm p-3">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted">Output length</label>
             <div className="flex gap-1.5">
@@ -200,7 +200,7 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
       )}
 
       {hasDetails ? (
-        <div className="rounded-lg border border-border bg-surface p-4">
+        <div className="rounded-lg border border-border bg-surface shadow-sm p-4">
           <div className="prose prose-sm max-w-none">
             <Markdown>{node.details_md!}</Markdown>
           </div>

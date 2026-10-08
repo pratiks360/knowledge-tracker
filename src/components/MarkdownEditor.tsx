@@ -40,7 +40,7 @@ export function MarkdownEditor({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface">
+    <div className="rounded-lg border border-border bg-surface shadow-sm">
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <div className="flex gap-1 text-xs">
           <button

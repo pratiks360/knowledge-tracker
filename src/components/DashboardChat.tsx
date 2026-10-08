@@ -212,7 +212,7 @@ export function DashboardChat({
   }
 
   return (
-    <section className="mb-8 overflow-hidden rounded-lg border border-border bg-surface">
+    <section className="mb-8 overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border px-3 py-3 sm:px-4">
         <div className="min-w-0">
           <h2 className="font-display text-sm font-semibold text-text">Coach</h2>

@@ -127,7 +127,7 @@ export function QuizPanel({ node }: { node: NodeRow }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-border bg-surface p-5">
+      <div className="w-full max-w-lg rounded-lg border border-border bg-surface shadow-lg animate-pop p-5">
         {loading && <p className="text-sm text-muted">Generating quiz…</p>}
         {error && <p className="text-sm text-error">{error}</p>}
 

@@ -52,7 +52,7 @@ export function AddResourceForm({ nodeId }: { nodeId: string }) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-3">
+    <div className="rounded-lg border border-border bg-surface shadow-sm p-3">
       <form onSubmit={handleAddUrl} className="flex gap-2">
         <input
           value={url}

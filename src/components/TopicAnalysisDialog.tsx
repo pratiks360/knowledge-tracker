@@ -151,7 +151,7 @@ export function TopicAnalysisDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-surface"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-lg animate-pop"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-border px-4 py-3">
@@ -171,7 +171,7 @@ export function TopicAnalysisDialog({
             if (!s) return null
             const related = t.related_existing_ids.map((id) => byId.get(id)).filter(Boolean) as NodeRow[]
             return (
-              <div key={i} className="mb-4 rounded-lg border border-border bg-surface-2 p-3">
+              <div key={i} className="mb-4 rounded-lg border border-border bg-surface shadow-sm-2 p-3">
                 <div className="mb-1 flex items-center justify-between gap-2">
                   <span className="font-medium text-text">{t.title}</span>
                   <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] text-accent">

@@ -154,7 +154,7 @@ export function RoadmapQuickAdd({
       onClick={error ? onClose : undefined}
     >
       <div
-        className="w-full max-w-md rounded-lg border border-border bg-surface p-5"
+        className="w-full max-w-md rounded-lg border border-border bg-surface shadow-lg animate-pop p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-1 text-sm font-medium text-text">

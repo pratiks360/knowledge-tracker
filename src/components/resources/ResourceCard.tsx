@@ -67,7 +67,7 @@ export function ResourceCard({ resource, nodeId }: { resource: ResourceRow; node
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-3">
+    <div className="rounded-lg border border-border bg-surface shadow-sm p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <span className="mr-2 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase text-muted">
