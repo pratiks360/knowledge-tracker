@@ -260,8 +260,9 @@ Rules:
 - "prerequisites" lists the exact "title" strings of OTHER items in this same proposal that should be
   learned first (leave empty if none, or if the prerequisite isn't part of this proposal).
 - Order items in the array in the sequence they should be learned.
-- Nest closely related sub-subtopics under "children" (max 2 levels of nesting).
-- Keep titles short (2-6 words). Keep descriptions to one sentence.
+- Give EVERY top-level item 3-6 "children" (its subtopics); only leave "children" empty for an item
+  that is genuinely atomic. Children may nest one more level where it helps (max 3 levels total).
+- Keep titles short (2-6 words). Keep each description under 15 words.
 - Propose 4-10 top-level items unless the topic clearly warrants fewer.
 - If the topic is a certification or exam (e.g. "CCDAK", "Terraform Associate", "AWS Certified
   Developer", "CKA"), structure the top level around that certification's official exam domains /
@@ -288,7 +289,27 @@ ${webSearchEnabled ? 'You have web search available — use it for up-to-date or
 ${context}`
 }
 
-export function dashboardChatSystemPrompt(context: string, webSearchEnabled: boolean) {
+export function dashboardChatSystemPrompt(
+  context: string,
+  webSearchEnabled: boolean,
+  focus?: { title: string; tree: string }
+) {
+  const focusBlock = focus
+    ? `
+
+The user has selected an EXISTING roadmap to work on: "${focus.title}". When they ask to
+modify it (add topics or subtopics, restructure, fill gaps), talk about concrete additions to THIS
+roadmap — reference its real items by name, don't propose what's already there. Don't write the changes out
+in full; tell them to hit "Build roadmap" and the additions will be generated for review and merged into
+"${focus.title}".
+
+Selected roadmap (id: title, indented by depth):
+${focus.tree}`
+    : ''
+  return dashboardChatSystemPromptBase(context, webSearchEnabled) + focusBlock
+}
+
+function dashboardChatSystemPromptBase(context: string, webSearchEnabled: boolean) {
   return `You are the study coach for the user's personal knowledge graph — a single learner's tree of
 topics they're working through. Unlike the per-topic chat, you can see their WHOLE graph, so you can
 answer across topics, talk about overall progress, help them decide what to learn next, and give them
@@ -347,8 +368,11 @@ Rules:
   the user actually said they want to learn.
 - "nodes" is the ordered roadmap underneath that root. Order items in the sequence they should be learned.
 - "prerequisites" lists exact "title" strings of OTHER items in this same proposal (empty if none).
-- Nest closely related sub-subtopics under "children" (max 2 levels of nesting).
-- Keep titles short (2-6 words). Keep descriptions to one sentence.
+- Give EVERY top-level item 3-6 "children" (its subtopics) — a roadmap of bare top-level headings is
+  useless. Only leave "children" empty for an item that is genuinely atomic. Children may nest one more
+  level where it helps (max 3 levels total).
+- Keep titles short (2-6 words). Keep each description under 15 words — long descriptions get the
+  response cut off before the later items are written.
 - Propose 4-10 top-level items unless the conversation clearly warrants fewer.
 - Honour what the user asked for in the conversation — their stated goal, level, timeline, and any
   areas they said to include or skip. The conversation outranks your own idea of a standard roadmap.
@@ -427,6 +451,48 @@ Rules:
 - "title" (the root) names the whole outline in 2-6 words, e.g. the exam, course, or subject it describes.
   Use this hint if it fits, otherwise infer a better one: "${titleHint}".`,
     user: `Outline:\n${outline}`,
+  }
+}
+
+/**
+ * Modifies an EXISTING roadmap from a coach conversation: the model returns only what to ADD,
+ * each addition pointing at the existing item it belongs under. Existing items are never
+ * re-proposed, renamed, or removed.
+ */
+export function roadmapExtendPrompt(
+  conversation: string,
+  rootTitle: string,
+  existingTree: string,
+  online = false
+) {
+  const freshness = online
+    ? `
+
+You have live web search available (today is ${new Date().toISOString().slice(0, 10)}). Use it so ` +
+      `additions reflect current releases, versions, and exam objectives. CRITICAL: no URLs, markdown ` +
+      `links, citations, or footnotes anywhere — they break JSON parsing.`
+    : ''
+  return {
+    system: `You are a curriculum designer. The user has an EXISTING roadmap, "${rootTitle}", and has been
+telling you how they want to change it. Work out what to ADD to it.${freshness}
+
+Respond with ONLY a JSON object, no markdown fences, no commentary:
+{"additions": [{"title": string, "description": string, "parentTitle": string | null, "prerequisites": string[], "children": [...same shape without parentTitle...]}]}
+
+Rules:
+- Return ONLY new topics. Never repeat, rename, move, or remove anything already in the roadmap.
+- "parentTitle" is the EXACT title of the existing item the topic belongs under, copied from the roadmap
+  below, or null to add it directly under "${rootTitle}". Add a subtopic to an existing item by naming
+  that item; add a whole new branch with parentTitle null and its own "children".
+- Give any new branch 3-6 "children". Keep titles short (2-6 words) and each description under 15 words.
+- Honour the conversation: what they asked to add, at what level, and anything they said to skip. If they
+  pasted an outline, keep its sections and bullets (order, wording) as the additions.
+- If nothing in the conversation asks for a change, return {"additions": []}.`,
+    user: `## Existing roadmap "${rootTitle}" (id: title, indented by depth — ignore the ids in your output)
+${existingTree || '(empty)'}
+
+## Conversation
+${conversation}`,
   }
 }
 

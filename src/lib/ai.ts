@@ -5,6 +5,7 @@ import {
   formatNotesPrompt,
   jdPrepPrompt,
   quizPrompt,
+  roadmapExtendPrompt,
   roadmapFromOutlinePrompt,
   recapPrompt,
   reduceSummariesPrompt,
@@ -285,11 +286,12 @@ function scanJson(text: string): { complete: string | null; salvaged: string | n
   const start = text.search(/[[{]/)
   if (start === -1) return { complete: null, salvaged: null }
   const s = text.slice(start)
-  const open = s[0]
-  let depth = 0
+  const stack: string[] = [] // closers still owed, innermost last
   let inStr = false
   let escaped = false
-  let lastElementEnd = -1 // index just past the last top-level element that closed (array only)
+  // Latest point where a value finished cleanly at any depth, plus the closers still owed there.
+  let safeEnd = -1
+  let safeStack: string[] = []
   for (let i = 0; i < s.length; i++) {
     const ch = s[i]
     if (inStr) {
@@ -299,16 +301,21 @@ function scanJson(text: string): { complete: string | null; salvaged: string | n
       continue
     }
     if (ch === '"') inStr = true
-    else if (ch === '[' || ch === '{') depth++
+    else if (ch === '[') stack.push(']')
+    else if (ch === '{') stack.push('}')
     else if (ch === ']' || ch === '}') {
-      depth--
-      if (depth === 1) lastElementEnd = i + 1
-      if (depth === 0) return { complete: s.slice(0, i + 1), salvaged: null }
+      stack.pop()
+      if (stack.length === 0) return { complete: s.slice(0, i + 1), salvaged: null }
+      safeEnd = i + 1
+      safeStack = [...stack]
     }
   }
-  // Never returned to depth 0 → truncated. For an array, keep the elements that did complete.
-  const salvaged =
-    open === '[' && lastElementEnd > 0 ? s.slice(0, lastElementEnd).replace(/,\s*$/, '') + ']' : null
+  // Never returned to depth 0 → cut off mid-stream (token cap). Keep everything up to the last
+  // value that closed cleanly and close the containers still open — works for a bare array AND
+  // for a wrapper object like {"title": …, "nodes": [ …cut off… ]}, so a long roadmap loses only
+  // its unfinished tail instead of failing outright.
+  if (safeEnd <= 0) return { complete: null, salvaged: null }
+  const salvaged = s.slice(0, safeEnd).replace(/,\s*$/, '') + safeStack.reverse().join('')
   return { complete: null, salvaged }
 }
 
@@ -506,7 +513,7 @@ export async function generateRoadmap(
   // Cert-domain roadmaps and pasted-outline imports produce larger trees than a plain topic; the
   // online path needs extra headroom because web-grounded answers run longer and must not truncate
   // mid-JSON (a cut-off response can't be parsed).
-  const raw = await chatJSON<unknown>({ ...cfg, model, system, user, maxTokens: online ? 5000 : 3200 })
+  const raw = await chatJSON<unknown>({ ...cfg, model, system, user, maxTokens: online ? 8000 : 6000 })
   // Models don't reliably return the exact bare-array shape (esp. certs → "domains" objects);
   // normalize so a valid-but-differently-shaped response still yields a tree instead of nothing.
   return normalizeProposal(raw)
@@ -536,7 +543,7 @@ export async function generateRoadmapFromChat(
     model,
     system,
     user,
-    maxTokens: online ? 5000 : 3200,
+    maxTokens: online ? 8000 : 6000,
   })
 
   const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
@@ -545,6 +552,55 @@ export async function generateRoadmapFromChat(
   // and return the bare array, or nest the roadmap under a differently-named key.
   const nodes = normalizeProposal(obj.nodes ?? raw)
   return { title, nodes }
+}
+
+export interface RoadmapAddition {
+  title: string
+  description?: string
+  /** Exact title of the existing roadmap item to nest under; null → directly under the roadmap root. */
+  parentTitle: string | null
+  prerequisites?: string[]
+  children?: RoadmapProposalNode[]
+}
+
+/**
+ * Asks what to ADD to an existing roadmap, from a coach conversation. Additions only — the
+ * existing tree is context, never re-emitted.
+ */
+export async function generateRoadmapAdditions(
+  cfg: AIConfig,
+  conversation: string,
+  rootTitle: string,
+  existingTree: string,
+  opts: { webSearch?: boolean } = {}
+): Promise<RoadmapAddition[]> {
+  const online = !!opts.webSearch && cfg.provider === 'openrouter'
+  const { system, user } = roadmapExtendPrompt(conversation, rootTitle, existingTree, online)
+  const model = online ? `${cfg.model}:online` : cfg.model
+  const raw = await chatJSON<unknown>({
+    ...cfg,
+    model,
+    system,
+    user,
+    temperature: 0.3,
+    maxTokens: online ? 8000 : 6000,
+  })
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const list = Array.isArray(obj.additions) ? obj.additions : Array.isArray(raw) ? raw : []
+  const out: RoadmapAddition[] = []
+  for (const item of list) {
+    const node = coerceNode(item)
+    if (!node) continue
+    const parent = (item as Record<string, unknown>).parentTitle
+    out.push({
+      title: node.title,
+      description: node.description,
+      parentTitle: typeof parent === 'string' && parent.trim() ? parent.trim() : null,
+      prerequisites: node.prerequisites,
+      children: node.children,
+    })
+  }
+  return out
 }
 
 /**
