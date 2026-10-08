@@ -5,6 +5,7 @@ import {
   formatNotesPrompt,
   jdPrepPrompt,
   quizPrompt,
+  roadmapFromOutlinePrompt,
   recapPrompt,
   reduceSummariesPrompt,
   roadmapChatPrompt,
@@ -544,6 +545,33 @@ export async function generateRoadmapFromChat(
   // and return the bare array, or nest the roadmap under a differently-named key.
   const nodes = normalizeProposal(obj.nodes ?? raw)
   return { title, nodes }
+}
+
+/**
+ * Transcribes a user-pasted outline into a root title + tree without redesigning it.
+ * Larger token budget than a generated roadmap: every outline item must survive, and a
+ * truncated response would silently drop the tail of the user's outline.
+ */
+export async function generateRoadmapFromOutline(
+  cfg: AIConfig,
+  outline: string,
+  titleHint: string,
+  opts: { webSearch?: boolean } = {}
+): Promise<ChatRoadmapProposal> {
+  const online = !!opts.webSearch && cfg.provider === 'openrouter'
+  const { system, user } = roadmapFromOutlinePrompt(outline, titleHint, online)
+  const model = online ? `${cfg.model}:online` : cfg.model
+  const raw = await chatJSON<unknown>({
+    ...cfg,
+    model,
+    system,
+    user,
+    temperature: 0.1,
+    maxTokens: online ? 6500 : 5000,
+  })
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const title = typeof obj.title === 'string' ? obj.title.trim() : ''
+  return { title, nodes: normalizeProposal(obj.nodes ?? raw) }
 }
 
 /** Config for the provider generating embeddings — reuses that provider's stored key. */

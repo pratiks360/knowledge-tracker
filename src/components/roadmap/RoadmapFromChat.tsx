@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useCreateNode, useNodes, serializeTreeForAI } from '@/lib/queries/nodes'
-import { useAIConfig } from '@/lib/queries/settings'
+import { useAIConfig, useWebSearchConfig } from '@/lib/queries/settings'
 import {
   chatJSON,
   generateRoadmapFromChat,
@@ -33,6 +33,7 @@ export function RoadmapFromChat({
   onDone: (nodeId: string) => void
 }) {
   const aiConfig = useAIConfig()
+  const webSearchConfig = useWebSearchConfig()
   const createNode = useCreateNode()
   const { data: nodes } = useNodes()
   const [rootId, setRootId] = useState<string | null>(null)
@@ -88,7 +89,8 @@ export function RoadmapFromChat({
         const tree = serializeTreeForAI(nodes ?? [])
 
         const { title, nodes: proposed } = await generateRoadmapFromChat(
-          aiConfig,
+          // Web search runs on the OpenRouter key even when chat is on another provider.
+          webSearch && webSearchConfig ? webSearchConfig : aiConfig,
           transcript,
           tree,
           { webSearch }

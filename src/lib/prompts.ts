@@ -352,6 +352,12 @@ Rules:
 - Propose 4-10 top-level items unless the conversation clearly warrants fewer.
 - Honour what the user asked for in the conversation — their stated goal, level, timeline, and any
   areas they said to include or skip. The conversation outranks your own idea of a standard roadmap.
+- If a "User" message contains a pasted outline, syllabus, or exam guide (a multi-line structured list of
+  sections and bullets), that outline IS the roadmap's backbone: keep its sections as the top-level nodes
+  and its bullets as their children, in its order and with its wording. Do not replace it with your own
+  design, drop its items, or let the coach's replies override it — only fill clear gaps around it. Outline
+  items are kept even when the user already has a similar topic (the no-duplicates rule below applies to
+  topics YOU would add, not to what the user pasted).
 - If they're targeting a certification or exam, structure the top level around that exam's official
   domains and nest each domain's subtopics under it.
 - The user's EXISTING topics are listed below. Do NOT propose duplicates or near-duplicates of topics
@@ -386,6 +392,41 @@ Rules:
 - Keep newTopics to what's genuinely missing — 4-12 items unless the JD clearly needs more or fewer.
 - Don't duplicate an existing topic's title in newTopics even loosely reworded.`,
     user: `Job description:\n${jdText}\n\nExisting topics:\n${existingTree || '(none yet)'}`,
+  }
+}
+
+/**
+ * Faithful import of a user-pasted outline (syllabus, exam guide, roadmap.sh export).
+ * Unlike roadmapPrompt/roadmapFromChatPrompt this does NOT redesign: the user already
+ * decided the structure, so the job is to transcribe it into a tree, not improve it.
+ */
+export function roadmapFromOutlinePrompt(outline: string, titleHint: string, online = false) {
+  const freshness = online
+    ? `\n\nYou have live web search available (today is ${new Date().toISOString().slice(0, 10)}). Use it ` +
+      `ONLY to sharpen "description" text with current facts — never to add, drop, rename, or reorder ` +
+      `outline items. CRITICAL: no URLs, markdown links, citations, or footnotes anywhere — they break JSON parsing.`
+    : ''
+  return {
+    system: `You convert a pasted outline into a topic tree. The user already decided the structure — your job
+is faithful transcription, NOT redesign.${freshness}
+
+Respond with ONLY a JSON object, no markdown fences, no commentary:
+{"title": string, "nodes": [{"title": string, "description": string, "prerequisites": string[], "children": [...same shape...]}]}
+
+Rules:
+- Every heading/section in the outline becomes a top-level node, in the SAME order. Every bullet beneath it
+  becomes a child of that node, in the same order. Deeper indentation becomes deeper nesting.
+- Keep the outline's own wording for titles. Do not rename, merge, split, reorder, generalize, or drop items,
+  and do NOT add topics that aren't in the outline.
+- Strip list markers and numbering ("1.", "*", "-"), but keep meaningful prefixes like "Domain 1:" when the
+  heading uses them. Trailing weights like "(27%)" belong in the description, not the title.
+- A bullet of the form "Name: explanation" becomes title "Name" and description "explanation". Text under a
+  heading such as "Focus: …" becomes that heading's description. Keep descriptions to one or two sentences;
+  paraphrase only to shorten, never to change meaning.
+- "prerequisites": leave empty unless the outline itself states an ordering dependency.
+- "title" (the root) names the whole outline in 2-6 words, e.g. the exam, course, or subject it describes.
+  Use this hint if it fits, otherwise infer a better one: "${titleHint}".`,
+    user: `Outline:\n${outline}`,
   }
 }
 
