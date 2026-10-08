@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUserSettings, useSaveUserSettings, useRunAutofillNow } from '@/lib/queries/settings'
 import { useNodes } from '@/lib/queries/nodes'
+import { looksTruncated } from '@/lib/detailsQuality'
 
 const STATUS_LABEL: Record<string, string> = {
   ok: 'completed',
@@ -16,6 +17,12 @@ export function AutofillSettings() {
   const runNow = useRunAutofillNow()
   const [runError, setRunError] = useState<string | null>(null)
 
+  // Saved write-ups that were cut off — the nightly run re-does these after the empty topics.
+  const brokenCount = useMemo(
+    () =>
+      (nodes ?? []).filter((n) => n.details_generated_at && looksTruncated(n.details_md)).length,
+    [nodes]
+  )
   const emptyCount = useMemo(
     () => (nodes ?? []).filter((n) => !n.details_md?.trim()).length,
     [nodes]
@@ -109,6 +116,13 @@ export function AutofillSettings() {
       <div className="mt-3 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
         <span className="text-text">{emptyCount}</span> topic{emptyCount === 1 ? '' : 's'} still
         without details.
+        {brokenCount > 0 && (
+          <>
+            {' '}
+            <span className="text-text">{brokenCount}</span> saved write-up
+            {brokenCount === 1 ? ' was' : 's were'} cut off and will be redone.
+          </>
+        )}
         {settings?.autofill_last_run && (
           <>
             {' · Last run '}

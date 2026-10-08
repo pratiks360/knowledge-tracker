@@ -15,6 +15,7 @@ import {
   summarizeResourcePrompt,
   topicAnalysisPrompt,
 } from '@/lib/prompts'
+import { looksTruncated, tidyTruncated } from '@/lib/detailsQuality'
 import { supabase } from '@/lib/supabase'
 import type { AIProvider, QuizQuestion } from '@/types/db'
 
@@ -223,6 +224,55 @@ async function chatCompletion({
   const content = data.choices?.[0]?.message?.content
   if (typeof content !== 'string') throw new AIError('AI response had no content.')
   return content
+}
+
+/**
+ * Chat completion for long-form output. If the model stops because it hit the token cap
+ * (`finish_reason: "length"`), asks it to continue from where it stopped, up to `maxContinuations`
+ * times, so a write-up isn't saved cut off mid-sentence. Anything still cut off after that is
+ * tidied back to its last complete paragraph rather than stored dangling.
+ */
+async function chatLongText(
+  opts: ChatOptions,
+  maxContinuations = 2
+): Promise<string> {
+  const { provider, apiKey, model, baseUrl, system, user, temperature = 0.4, maxTokens = 1500 } = opts
+  if (!apiKey) throw new AIError('No API key configured.', 'missing_key')
+  const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ]
+  let full = ''
+  for (let round = 0; round <= maxContinuations; round++) {
+    const res = await providerFetch(provider, baseUrl, apiKey, '/chat/completions', {
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      messages,
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new AIError(`AI request failed (${res.status}): ${text.slice(0, 200)}`)
+    }
+    const data = await res.json()
+    const choice = data.choices?.[0]
+    const chunk = choice?.message?.content
+    if (typeof chunk !== 'string' || !chunk.trim()) {
+      if (round === 0) throw new AIError('AI response had no content.')
+      break
+    }
+    full += chunk
+    if (choice.finish_reason !== 'length') break
+    messages.push(
+      { role: 'assistant', content: chunk },
+      {
+        role: 'user',
+        content:
+          'Continue exactly where you left off. Do not repeat anything or restart; finish the write-up.',
+      }
+    )
+  }
+  return looksTruncated(full) ? tidyTruncated(full) : full
 }
 
 /** Chat completion returning plain text/markdown. */
@@ -718,7 +768,7 @@ export async function generateNodeDetails(
     online,
   })
   const model = online ? `${cfg.model}:online` : cfg.model
-  return chatText({ ...cfg, model, system, user, maxTokens: DETAILS_MAX_TOKENS[length] })
+  return chatLongText({ ...cfg, model, system, user, maxTokens: DETAILS_MAX_TOKENS[length] })
 }
 
 /** Merges appended blocks back into the body of a note, returning the rewritten Markdown. */

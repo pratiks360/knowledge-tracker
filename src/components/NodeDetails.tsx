@@ -7,6 +7,7 @@ import { useResources } from '@/lib/queries/resources'
 import { useAIConfig } from '@/lib/queries/settings'
 import { generateNodeDetails, AIError, type DetailsLength } from '@/lib/ai'
 import { SourceList } from '@/components/resources/SourceList'
+import { looksTruncated } from '@/lib/detailsQuality'
 
 const LENGTH_OPTIONS: { value: DetailsLength; label: string }[] = [
   { value: 'brief', label: 'Brief' },
@@ -53,6 +54,7 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
 
   const hasDetails = !!node.details_md?.trim()
   const sources = resources ?? []
+  const cutOff = hasDetails && looksTruncated(node.details_md)
 
   // Sources attached after the write-up was generated aren't reflected in it yet.
   const newSources =
@@ -182,6 +184,22 @@ export function NodeDetails({ node, ancestors }: { node: NodeRow; ancestors: Nod
       )}
 
       {error && <p className="mb-2 text-sm text-error">{error}</p>}
+
+      {cutOff && (
+        <div
+          role="status"
+          className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-text"
+        >
+          <span>This write-up looks cut off — it ended before the model finished.</span>
+          <button
+            onClick={generate}
+            disabled={loading || !aiConfig}
+            className="rounded border border-warning/50 px-2 py-0.5 font-medium text-warning hover:bg-warning/10 disabled:opacity-50"
+          >
+            Regenerate
+          </button>
+        </div>
+      )}
 
       {hasDetails && newSources.length > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-text">

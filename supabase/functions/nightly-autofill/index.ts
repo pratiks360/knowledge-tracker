@@ -145,7 +145,7 @@ async function runForUser(supabase: any, s: Record<string, unknown>) {
   // All of the user's nodes — for ancestor paths and the work queue.
   const { data: allNodes, error: nErr } = await supabase
     .from('nodes')
-    .select('id, parent_id, title, description, notes_md, details_md')
+    .select('id, parent_id, title, description, notes_md, details_md, details_generated_at')
     .eq('user_id', userId)
   if (nErr) {
     await finish(0, 'error')
@@ -155,9 +155,16 @@ async function runForUser(supabase: any, s: Record<string, unknown>) {
   const byId = new Map<string, Record<string, unknown>>(
     (allNodes ?? []).map((n: Record<string, unknown>) => [String(n.id), n])
   )
-  const queue = (allNodes ?? [])
-    .filter((n: Record<string, unknown>) => !n.details_md || String(n.details_md).trim() === '')
-    .slice(0, cap)
+  // Empty topics first, then AI write-ups that were saved cut off (so earlier truncation bugs
+  // self-heal). Only nodes with a generated-at stamp are treated as repairable — never text a
+  // person wrote themselves.
+  const isEmpty = (n: Record<string, unknown>) => !n.details_md || String(n.details_md).trim() === ''
+  const isBroken = (n: Record<string, unknown>) =>
+    !isEmpty(n) && !!n.details_generated_at && looksTruncated(String(n.details_md))
+  const queue = [
+    ...(allNodes ?? []).filter(isEmpty),
+    ...(allNodes ?? []).filter(isBroken),
+  ].slice(0, cap)
 
   const pathOf = (n: Record<string, unknown>): string => {
     const parts: string[] = [String(n.title)]
@@ -226,44 +233,88 @@ function buildContext(
   return parts.join('\n\n')
 }
 
-const SYSTEM = `You are a study assistant. Write a comprehensive, well-structured explainer in Markdown
-about the topic below, using the provided context (topic path, notes, resources). If a "Topic path" is
-given, scope the explainer to that path and read the title relative to its parents rather than as a
-generic word. Use clear headings: an overview, key concepts in depth, how they fit together, and
-practical examples where the context supports it. Where a diagram clarifies (architecture, flow,
-sequence, hierarchy), include a \`\`\`mermaid fenced block with valid syntax. Do not invent facts that
-contradict the context; general foundational context is fine. Keep it accurate.`
+const SYSTEM = `You are a study assistant. Write a well-structured explainer in Markdown about the topic
+below, using the provided context (topic path, notes, resources). If a "Topic path" is given, scope the
+explainer to that path and read the title relative to its parents rather than as a generic word. Use clear
+headings: an overview, key concepts, how they fit together, and practical examples where the context
+supports it. Where a diagram clarifies (architecture, flow, sequence, hierarchy), include a \`\`\`mermaid
+fenced block with valid syntax. Do not invent facts that contradict the context; general foundational
+context is fine. Keep it accurate. Aim for roughly 600-900 words and FINISH the write-up — end with a
+complete closing section rather than running long.`
+
+const MAX_TOKENS = 3000
+const MAX_CONTINUATIONS = 2
+const MIN_CHARS = 300 // anything shorter is a stub, not an explainer
+
+/**
+ * True when saved markdown looks cut off: an unclosed code fence, ends mid-sentence or on a
+ * dangling list marker, or is too short to be a real write-up. Mirrors src/lib/detailsQuality.ts.
+ */
+function looksTruncated(md: string): boolean {
+  const t = md.trim()
+  if (t.length < MIN_CHARS) return true
+  if (((t.match(/```/g) ?? []).length) % 2 === 1) return true
+  if (/(^|\n)\s*(\d+[.)]|[-*+])\s*$/.test(t)) return true
+  return !/[.!?)\]|`*_>"”:]$/.test(t)
+}
+
+/** Last-resort tidy for output that is STILL cut off after continuations: drop the dangling tail. */
+function tidy(md: string): string {
+  let out = md.trimEnd()
+  if (((out.match(/```/g) ?? []).length) % 2 === 1) {
+    out = out.slice(0, out.lastIndexOf('```')).trimEnd() // drop the unfinished code/diagram block
+  }
+  const cut = out.lastIndexOf('\n\n')
+  if (!/[.!?)\]|`*_>"”:]$/.test(out) && cut > MIN_CHARS) out = out.slice(0, cut).trimEnd()
+  return out
+}
 
 async function callProvider(
   p: ProviderCfg,
   context: string
 ): Promise<{ ok: boolean; content?: string; exhausted?: boolean }> {
   try {
-    const res = await fetch(`${p.base}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${p.key}`,
-      },
-      body: JSON.stringify({
-        model: p.model,
-        temperature: 0.4,
-        max_tokens: 2000,
-        messages: [
-          { role: 'system', content: SYSTEM },
-          { role: 'user', content: context },
-        ],
-      }),
-    })
-    // 429 rate limit, 402 out of credit, 403 key/credit limit exceeded → this provider is spent.
-    if (res.status === 429 || res.status === 402 || res.status === 403) {
-      return { ok: false, exhausted: true }
+    const messages: { role: string; content: string }[] = [
+      { role: 'system', content: SYSTEM },
+      { role: 'user', content: context },
+    ]
+    let full = ''
+    for (let round = 0; round <= MAX_CONTINUATIONS; round++) {
+      const res = await fetch(`${p.base}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${p.key}`,
+        },
+        body: JSON.stringify({
+          model: p.model,
+          temperature: 0.4,
+          max_tokens: MAX_TOKENS,
+          messages,
+        }),
+      })
+      // 429 rate limit, 402 out of credit, 403 key/credit limit exceeded → this provider is spent.
+      if (res.status === 429 || res.status === 402 || res.status === 403) {
+        return { ok: false, exhausted: true }
+      }
+      if (!res.ok) return { ok: false }
+      const data = await res.json()
+      const choice = data.choices?.[0]
+      const chunk = choice?.message?.content
+      if (typeof chunk !== 'string' || !chunk.trim()) break
+      full += chunk
+      // Hit the token cap mid-write-up → ask the model to pick up exactly where it stopped.
+      if (choice.finish_reason !== 'length') break
+      messages.push(
+        { role: 'assistant', content: chunk },
+        { role: 'user', content: 'Continue exactly where you left off. Do not repeat anything or restart; finish the write-up.' }
+      )
     }
-    if (!res.ok) return { ok: false }
-    const data = await res.json()
-    const content = data.choices?.[0]?.message?.content
-    if (typeof content === 'string' && content.trim()) return { ok: true, content }
-    return { ok: false }
+    if (!full.trim()) return { ok: false }
+    if (looksTruncated(full)) full = tidy(full)
+    // A tiny result is a bad generation (e.g. a one-line stub), not content worth saving.
+    if (full.trim().length < MIN_CHARS) return { ok: false }
+    return { ok: true, content: full }
   } catch {
     return { ok: false }
   }
