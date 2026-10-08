@@ -199,6 +199,7 @@ export function DashboardChat({
         content,
         config: useSearch ? webSearchConfig! : aiConfig,
         webSearch: useSearch,
+        fallback: aiConfig,
         focus: activeTarget ? { title: activeTarget.title, tree: subtreeText(allNodes, activeTarget.id) } : undefined,
       },
       {
@@ -440,6 +441,9 @@ export function DashboardChat({
               <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />
             </svg>
             Web search
+            {webSearchAvailable && aiConfig && aiConfig.provider !== 'openrouter' && (
+              <span className="font-normal opacity-70">· via OpenRouter</span>
+            )}
           </button>
           <textarea
             value={draft}
