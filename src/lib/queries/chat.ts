@@ -298,11 +298,14 @@ export function useSendGlobalChatMessage(allNodes: NodeRow[]) {
       config,
       webSearch,
       focus,
+      fallback,
     }: {
       threadId: string
       content: string
       config: AIConfig
       webSearch: boolean
+      /** Active provider to retry on (without web search) if the web-search call fails, e.g. OpenRouter out of credit. */
+      fallback?: AIConfig
       /** An existing roadmap the user selected in the coach — becomes extra context for replies. */
       focus?: { title: string; tree: string }
     }) => {
@@ -339,7 +342,20 @@ export function useSendGlobalChatMessage(allNodes: NodeRow[]) {
       const system = dashboardChatSystemPrompt(buildGraphContext(allNodes), useWebSearch, focus)
       const model = useWebSearch ? `${config.model}:online` : config.model
 
-      const reply = await chatConversation({ ...config, model, system, history })
+      let reply: string
+      try {
+        reply = await chatConversation({ ...config, model, system, history })
+      } catch (e) {
+        // Web search runs on the OpenRouter key; if that's exhausted/rate-limited, answer from the
+        // active provider instead of failing the whole turn (the user message is already saved).
+        if (!(useWebSearch && fallback && fallback.provider !== config.provider)) throw e
+        const why = e instanceof Error ? e.message.slice(0, 90) : 'request failed'
+        const plain = dashboardChatSystemPrompt(buildGraphContext(allNodes), false, focus)
+        const answer = await chatConversation({ ...fallback, system: plain, history })
+        reply = `_Web search was unavailable (${why}…), so this was answered without it._
+
+${answer}`
+      }
 
       const { error: insertAssistantErr } = await supabase
         .from('chat_messages')
